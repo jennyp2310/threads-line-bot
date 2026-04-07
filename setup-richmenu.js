@@ -1,9 +1,9 @@
 // setup-richmenu.js
 const axios = require('axios');
 
-const TOKEN = process.env.rOq766wTC5BHPbSP4e8aUMm6Ujea56DvY27cn63dKJi4qnMNNnApOD2UBCpQoVzlqepCdA1nQCiAyfkVdEKeothxu/+JLH6AaiHMJfBaHo0MRCUkNSeg12stkNlgcdbM8b9lWDBkj/C9UkNDhuevxAdB04t89/1O/w1cDnyilFU=;
+const TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const headers = {
-  Authorization: `Bearer ${rOq766wTC5BHPbSP4e8aUMm6Ujea56DvY27cn63dKJi4qnMNNnApOD2UBCpQoVzlqepCdA1nQCiAyfkVdEKeothxu/+JLH6AaiHMJfBaHo0MRCUkNSeg12stkNlgcdbM8b9lWDBkj/C9UkNDhuevxAdB04t89/1O/w1cDnyilFU=}`,
+  Authorization: `Bearer ${TOKEN}`,
   'Content-Type': 'application/json',
 };
 
@@ -14,7 +14,7 @@ async function createRichMenu() {
     {
       size: { width: 2500, height: 843 },
       selected: true,
-      name: 'Threads 搜集怪😈',
+      name: 'Threads 收藏機器人',
       chatBarText: '收集好文！',
       areas: [
         {
