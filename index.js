@@ -131,15 +131,16 @@ async function handleMessage(event) {
   const userId = event.source.userId;
 
   // ── 收藏流程 ──
-  if (isThreadsUrl(text)) {
-    const parsed = parseThreadsUrl(text);
+if (isThreadsUrl(text)) {
+  const parsed = parseThreadsUrl(text);
 
-    if (!parsed) {
-      return replyText(event.replyToken, '❌ 無法解析連結，請確認格式是否正確。');
-    }
+  if (!parsed) {
+    return replyText(event.replyToken, '❌ 無法解析連結，請確認格式是否正確。');
+  }
 
-    await replyText(event.replyToken, '⏳ 讀取中，請稍候...');
+  await replyText(event.replyToken, '⏳ 讀取中，請稍候...');
 
+  try {
     const { content, postDate } = await fetchThreadsContent(parsed.cleanUrl);
 
     if (!content) {
@@ -155,7 +156,7 @@ async function handleMessage(event) {
       content,
       summary: aiResult.summary,
       category: aiResult.category,
-      postDate,  // 帶入發佈時間
+      postDate,
     });
 
     if (saved.success) {
@@ -173,8 +174,13 @@ async function handleMessage(event) {
       await pushText(userId, `⚠️ AI 分類完成，但 Notion 儲存失敗。\n錯誤：${saved.error}`);
     }
 
-    return;
+  } catch (err) {
+    console.error('收藏流程錯誤:', err);
+    await pushText(userId, `❌ 處理時發生錯誤：${err.message}`);
   }
+
+  return;
+}
 
   // ── 查詢分類 /分類 科技 ──
   if (text.startsWith('/分類')) {
