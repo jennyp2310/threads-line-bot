@@ -43,15 +43,52 @@ async function fetchThreadsContent(cleanUrl) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
 
+    // 抓文章內容
     const descMatch =
       html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i) ||
       html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i);
-
     const content = descMatch ? decodeHtmlEntities(descMatch[1]) : null;
-    return { content };
+
+    // 抓發佈時間：優先從 article:published_time 取得
+    let postDate = null;
+
+    const publishedTimeMatch =
+      html.match(/<meta\s+property="article:published_time"\s+content="([^"]+)"/i) ||
+      html.match(/<meta\s+content="([^"]+)"\s+property="article:published_time"/i);
+
+    if (publishedTimeMatch) {
+      postDate = publishedTimeMatch[1]; // ISO 格式，例如 2025-11-26T10:30:00.000Z
+    }
+
+    // 備用：從 JSON-LD 取得
+    if (!postDate) {
+      const jsonLdMatch = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
+      if (jsonLdMatch) {
+        try {
+          const jsonLd = JSON.parse(jsonLdMatch[1]);
+          const dateStr = jsonLd.datePublished || jsonLd.uploadDate || null;
+          if (dateStr) postDate = dateStr;
+        } catch (_) {}
+      }
+    }
+
+    // 備用：從 og:updated_time 取得
+    if (!postDate) {
+      const updatedMatch =
+        html.match(/<meta\s+property="og:updated_time"\s+content="([^"]+)"/i) ||
+        html.match(/<meta\s+content="([^"]+)"\s+property="og:updated_time"/i);
+      if (updatedMatch) postDate = updatedMatch[1];
+    }
+
+    // 格式化為 YYYY-MM-DD（Notion Date 欄位接受此格式）
+    if (postDate) {
+      postDate = postDate.slice(0, 10);
+    }
+
+    return { content, postDate };
   } catch (err) {
     console.error('Fetch Threads error:', err.message);
-    return { content: null };
+    return { content: null, postDate: null };
   }
 }
 
@@ -101,19 +138,16 @@ async function handleMessage(event) {
       return replyText(event.replyToken, '❌ 無法解析連結，請確認格式是否正確。');
     }
 
-    // 立即回覆「處理中」
     await replyText(event.replyToken, '⏳ 讀取中，請稍候...');
 
-    const { content } = await fetchThreadsContent(parsed.cleanUrl);
+    const { content, postDate } = await fetchThreadsContent(parsed.cleanUrl);
 
     if (!content) {
       return pushText(userId, '⚠️ 無法讀取文章內容，可能是私人帳號或 Threads 擋爬蟲。\n\n連結已記錄：' + parsed.cleanUrl);
     }
 
-    // AI 分類
     const aiResult = await classifyContent(content, parsed.username);
 
-    // 儲存到 Notion
     const saved = await saveToNotion({
       title: aiResult.title,
       url: parsed.cleanUrl,
@@ -121,15 +155,18 @@ async function handleMessage(event) {
       content,
       summary: aiResult.summary,
       category: aiResult.category,
+      postDate,  // 帶入發佈時間
     });
 
     if (saved.success) {
+      const dateInfo = postDate ? `\n📅 發佈時間：${postDate}` : '';
       const msg =
         `✅ 已儲存到 Notion！\n\n` +
         `📂 分類：${aiResult.category}\n` +
         `📌 標題：${aiResult.title}\n` +
         `📝 摘要：${aiResult.summary}\n` +
-        `👤 作者：@${parsed.username}\n` +
+        `👤 作者：@${parsed.username}` +
+        `${dateInfo}\n` +
         `🔗 ${parsed.cleanUrl}`;
       await pushText(userId, msg);
     } else {
@@ -158,17 +195,17 @@ async function handleMessage(event) {
     const results = await queryByKeyword(keyword);
     return pushText(userId, formatResults(results, keyword));
   }
-
-  // ── 說明 ──
-  if (text === '說明' || text === '/help') {
-    const help =
-      `📌 使用說明\n\n` +
-      `🧵 貼上 Threads 連結\n→ 自動分類並儲存到 Notion\n\n` +
-      `📂 /分類 科技\n→ 查詢指定分類的文章\n\n` +
-      `🔍 /搜尋 關鍵字\n→ 關鍵字搜尋文章\n\n` +
-      `可用分類：科技、設計、商業、行銷、健康、美食、旅遊、娛樂、教育、生活、時事、其他`;
-    return replyText(event.replyToken, help);
-  }
+  
+// ── 說明 ──
+if (text === '說明' || text === '/help') {
+  const help =
+    `📌 使用說明\n\n` +
+    `🧵 貼上 Threads 連結\n→ 自動分類並儲存到 Notion\n\n` +
+    `📂 /分類 好吃的\n→ 查詢指定分類的文章\n\n` +
+    `🔍 /搜尋 關鍵字\n→ 關鍵字搜尋文章\n\n` +
+    `可用分類：各種科技、給我錢、漂亮美眉、各種商業、各種行銷、健康寶寶、好吃的、我要出去玩！、好看的、學到2、各種時事、生活2266、其他`;
+  return replyText(event.replyToken, help);
+}
 
   // ── 預設 ──
   await replyText(event.replyToken, '貼上 Threads 連結來收藏文章 🧵\n傳「說明」查看使用方式');
