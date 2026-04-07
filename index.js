@@ -34,63 +34,49 @@ function parseThreadsUrl(text) {
 
 async function fetchThreadsContent(cleanUrl) {
   try {
+    // 先試 oEmbed API
+    const oembedUrl = `https://www.threads.net/oembed/?url=${encodeURIComponent(cleanUrl)}`;
+    const oembedRes = await fetch(oembedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      },
+    });
+
+    if (oembedRes.ok) {
+      const data = await oembedRes.json();
+      // oEmbed 回傳的內容在 html 欄位，需要去掉 HTML tag
+      const rawHtml = data.html || '';
+      const content = rawHtml
+        .replace(/<[^>]+>/g, ' ')  // 移除所有 HTML tag
+        .replace(/\s+/g, ' ')       // 合併空白
+        .trim();
+
+      const authorName = data.author_name || '';
+      console.log(`[oEmbed] 成功取得內容：${content.slice(0, 30)}...`);
+      return { content: content || null, postDate: null };
+    }
+
+    // oEmbed 失敗，退回直接 fetch HTML
+    console.log(`[oEmbed] 失敗，改用 fetch HTML`);
     const res = await fetch(cleanUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
-        'Accept-Language': 'zh-TW,zh;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8',
+        'Cache-Control': 'no-cache',
       },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
 
-    // 抓文章內容
     const descMatch =
       html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i) ||
       html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i);
     const content = descMatch ? decodeHtmlEntities(descMatch[1]) : null;
 
-    // 抓發佈時間，依序嘗試多種來源
     let postDate = null;
-
-    // 方法 1：article:published_time
-    const publishedMatch =
-      html.match(/<meta\s+property="article:published_time"\s+content="([^"]+)"/i) ||
-      html.match(/<meta\s+content="([^"]+)"\s+property="article:published_time"/i);
-    if (publishedMatch) {
-      postDate = publishedMatch[1];
-    }
-
-    // 方法 2：JSON-LD datePublished
-    if (!postDate) {
-      const jsonLdMatches = html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
-      for (const match of jsonLdMatches) {
-        try {
-          const jsonLd = JSON.parse(match[1]);
-          const dateStr = jsonLd.datePublished || jsonLd.uploadDate || jsonLd.dateCreated;
-          if (dateStr) { postDate = dateStr; break; }
-        } catch (_) {}
-      }
-    }
-
-    // 方法 3：HTML 裡任何 ISO 日期格式（最後手段）
-    if (!postDate) {
-      const isoMatch = html.match(/"datePublished"\s*:\s*"(\d{4}-\d{2}-\d{2}[^"]+)"/);
-      if (isoMatch) postDate = isoMatch[1];
-    }
-
-    // 方法 4：HTML 裡任何 YYYY-MM-DD 格式
-    if (!postDate) {
-      const dateMatch = html.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
-      if (dateMatch) postDate = dateMatch[1];
-    }
-
-    // 格式化為 YYYY-MM-DD
-    if (postDate) {
-      postDate = postDate.slice(0, 10);
-      console.log(`[日期] 抓到發佈時間：${postDate}`);
-    } else {
-      console.log(`[日期] 找不到發佈時間`);
-    }
+    const isoMatch = html.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
+    if (isoMatch) postDate = isoMatch[1].slice(0, 10);
 
     return { content, postDate };
   } catch (err) {
