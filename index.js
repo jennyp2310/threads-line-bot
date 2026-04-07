@@ -49,40 +49,47 @@ async function fetchThreadsContent(cleanUrl) {
       html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i);
     const content = descMatch ? decodeHtmlEntities(descMatch[1]) : null;
 
-    // 抓發佈時間：優先從 article:published_time 取得
+    // 抓發佈時間，依序嘗試多種來源
     let postDate = null;
 
-    const publishedTimeMatch =
+    // 方法 1：article:published_time
+    const publishedMatch =
       html.match(/<meta\s+property="article:published_time"\s+content="([^"]+)"/i) ||
       html.match(/<meta\s+content="([^"]+)"\s+property="article:published_time"/i);
-
-    if (publishedTimeMatch) {
-      postDate = publishedTimeMatch[1]; // ISO 格式，例如 2025-11-26T10:30:00.000Z
+    if (publishedMatch) {
+      postDate = publishedMatch[1];
     }
 
-    // 備用：從 JSON-LD 取得
+    // 方法 2：JSON-LD datePublished
     if (!postDate) {
-      const jsonLdMatch = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
-      if (jsonLdMatch) {
+      const jsonLdMatches = html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+      for (const match of jsonLdMatches) {
         try {
-          const jsonLd = JSON.parse(jsonLdMatch[1]);
-          const dateStr = jsonLd.datePublished || jsonLd.uploadDate || null;
-          if (dateStr) postDate = dateStr;
+          const jsonLd = JSON.parse(match[1]);
+          const dateStr = jsonLd.datePublished || jsonLd.uploadDate || jsonLd.dateCreated;
+          if (dateStr) { postDate = dateStr; break; }
         } catch (_) {}
       }
     }
 
-    // 備用：從 og:updated_time 取得
+    // 方法 3：HTML 裡任何 ISO 日期格式（最後手段）
     if (!postDate) {
-      const updatedMatch =
-        html.match(/<meta\s+property="og:updated_time"\s+content="([^"]+)"/i) ||
-        html.match(/<meta\s+content="([^"]+)"\s+property="og:updated_time"/i);
-      if (updatedMatch) postDate = updatedMatch[1];
+      const isoMatch = html.match(/"datePublished"\s*:\s*"(\d{4}-\d{2}-\d{2}[^"]+)"/);
+      if (isoMatch) postDate = isoMatch[1];
     }
 
-    // 格式化為 YYYY-MM-DD（Notion Date 欄位接受此格式）
+    // 方法 4：HTML 裡任何 YYYY-MM-DD 格式
+    if (!postDate) {
+      const dateMatch = html.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
+      if (dateMatch) postDate = dateMatch[1];
+    }
+
+    // 格式化為 YYYY-MM-DD
     if (postDate) {
       postDate = postDate.slice(0, 10);
+      console.log(`[日期] 抓到發佈時間：${postDate}`);
+    } else {
+      console.log(`[日期] 找不到發佈時間`);
     }
 
     return { content, postDate };
@@ -90,16 +97,6 @@ async function fetchThreadsContent(cleanUrl) {
     console.error('Fetch Threads error:', err.message);
     return { content: null, postDate: null };
   }
-}
-
-function decodeHtmlEntities(str) {
-  return str
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
 // ── 查詢結果格式化 ────────────────────────────────────────
