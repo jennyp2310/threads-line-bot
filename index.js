@@ -1,5 +1,7 @@
 const express = require('express');
 const line = require('@line/bot-sdk');
+const { classifyContent } = require('./ai');
+const { saveToNotion, queryByCategory, queryByKeyword } = require('./notion');
 
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
@@ -12,17 +14,15 @@ const client = new line.messagingApi.MessagingApiClient({
 
 const app = express();
 
-// 判斷是否為 Threads 連結
+// ── URL 工具函式 ──────────────────────────────────────────
+
 function isThreadsUrl(text) {
   return text.includes('threads.com') && text.includes('/post/');
 }
 
-// 解析 Threads URL，取出乾淨連結、用戶名、post ID
 function parseThreadsUrl(text) {
-  // 從訊息中擷取 URL（訊息可能夾雜其他文字）
   const urlMatch = text.match(/https:\/\/www\.threads\.com\/@([\w.]+)\/post\/([\w]+)/);
   if (!urlMatch) return null;
-
   return {
     cleanUrl: `https://www.threads.com/@${urlMatch[1]}/post/${urlMatch[2]}`,
     username: urlMatch[1],
@@ -30,7 +30,8 @@ function parseThreadsUrl(text) {
   };
 }
 
-// 用 fetch 抓 Threads 頁面的 og meta tag 取得文章內容
+// ── Threads 內容抓取 ──────────────────────────────────────
+
 async function fetchThreadsContent(cleanUrl) {
   try {
     const res = await fetch(cleanUrl, {
@@ -39,28 +40,21 @@ async function fetchThreadsContent(cleanUrl) {
         'Accept-Language': 'zh-TW,zh;q=0.9',
       },
     });
-
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
 
-    // 抓 og:description（通常是文章正文）
-    const descMatch = html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i)
-      || html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i);
-
-    const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)
-      || html.match(/<meta\s+content="([^"]+)"\s+property="og:title"/i);
+    const descMatch =
+      html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i) ||
+      html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i);
 
     const content = descMatch ? decodeHtmlEntities(descMatch[1]) : null;
-    const title = titleMatch ? decodeHtmlEntities(titleMatch[1]) : null;
-
-    return { content, title };
+    return { content };
   } catch (err) {
     console.error('Fetch Threads error:', err.message);
-    return { content: null, title: null };
+    return { content: null };
   }
 }
 
-// 處理 HTML 特殊字元（&amp; &quot; 等）
 function decodeHtmlEntities(str) {
   return str
     .replace(/&amp;/g, '&')
@@ -71,10 +65,24 @@ function decodeHtmlEntities(str) {
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
+// ── 查詢結果格式化 ────────────────────────────────────────
+
+function formatResults(items, label) {
+  if (items.length === 0) return `找不到「${label}」相關文章 😢`;
+
+  return items
+    .map((item, i) => {
+      const date = item.savedAt ? item.savedAt.slice(0, 10) : '';
+      return `${i + 1}. 【${item.category}】${item.title}\n   ${item.summary}\n   ${item.url}\n   ${item.username}  ${date}`;
+    })
+    .join('\n\n');
+}
+
+// ── Webhook 主入口 ────────────────────────────────────────
+
 app.post('/webhook', line.middleware(config), async (req, res) => {
   res.sendStatus(200);
-  const events = req.body.events;
-  for (const event of events) {
+  for (const event of req.body.events) {
     if (event.type === 'message' && event.message.type === 'text') {
       await handleMessage(event);
     }
@@ -83,47 +91,102 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
 async function handleMessage(event) {
   const text = event.message.text.trim();
-  let replyText = '';
+  const userId = event.source.userId;
 
+  // ── 收藏流程 ──
   if (isThreadsUrl(text)) {
     const parsed = parseThreadsUrl(text);
 
     if (!parsed) {
-      replyText = '❌ 無法解析這個 Threads 連結，請確認格式是否正確。';
-    } else {
-      // 先回一則「處理中」讓用戶知道有反應
-      await client.replyMessage({
-        replyToken: event.replyToken,
-        messages: [{ type: 'text', text: '⏳ 正在讀取文章內容...' }],
-      });
-
-      const { content, title } = await fetchThreadsContent(parsed.cleanUrl);
-
-      // 用 push 因為 replyToken 只能用一次
-      if (content) {
-        replyText = `✅ 成功讀取！\n\n👤 @${parsed.username}\n\n📝 內容：\n${content}\n\n🔗 ${parsed.cleanUrl}\n\n（AI 分類與 Notion 儲存開發中）`;
-      } else {
-        replyText = `⚠️ 連結有效，但無法讀取文章內容。\n\n👤 @${parsed.username}\n🔗 ${parsed.cleanUrl}\n\n可能是私人帳號或需要登入。`;
-      }
-
-      await client.pushMessage({
-        to: event.source.userId,
-        messages: [{ type: 'text', text: replyText }],
-      });
-
-      return; // 已用 push 回覆，不往下執行
+      return replyText(event.replyToken, '❌ 無法解析連結，請確認格式是否正確。');
     }
 
-  } else if (text === '/help' || text === '說明') {
-    replyText = `📌 使用說明\n\n直接貼上 Threads 連結 → 自動儲存\n/分類 科技 → 查詢分類\n/搜尋 關鍵字 → 搜尋文章\n說明 → 顯示此選單`;
+    // 立即回覆「處理中」
+    await replyText(event.replyToken, '⏳ 讀取中，請稍候...');
 
-  } else {
-    replyText = `貼上 Threads 連結來收藏文章 🧵\n\n傳「說明」查看使用方式`;
+    const { content } = await fetchThreadsContent(parsed.cleanUrl);
+
+    if (!content) {
+      return pushText(userId, '⚠️ 無法讀取文章內容，可能是私人帳號或 Threads 擋爬蟲。\n\n連結已記錄：' + parsed.cleanUrl);
+    }
+
+    // AI 分類
+    const aiResult = await classifyContent(content, parsed.username);
+
+    // 儲存到 Notion
+    const saved = await saveToNotion({
+      title: aiResult.title,
+      url: parsed.cleanUrl,
+      username: parsed.username,
+      content,
+      summary: aiResult.summary,
+      category: aiResult.category,
+    });
+
+    if (saved.success) {
+      const msg =
+        `✅ 已儲存到 Notion！\n\n` +
+        `📂 分類：${aiResult.category}\n` +
+        `📌 標題：${aiResult.title}\n` +
+        `📝 摘要：${aiResult.summary}\n` +
+        `👤 作者：@${parsed.username}\n` +
+        `🔗 ${parsed.cleanUrl}`;
+      await pushText(userId, msg);
+    } else {
+      await pushText(userId, `⚠️ AI 分類完成，但 Notion 儲存失敗。\n錯誤：${saved.error}`);
+    }
+
+    return;
   }
 
-  await client.replyMessage({
-    replyToken: event.replyToken,
-    messages: [{ type: 'text', text: replyText }],
+  // ── 查詢分類 /分類 科技 ──
+  if (text.startsWith('/分類')) {
+    const category = text.replace('/分類', '').trim();
+    if (!category) return replyText(event.replyToken, '請指定分類，例如：/分類 科技');
+
+    await replyText(event.replyToken, `🔍 搜尋「${category}」分類中...`);
+    const results = await queryByCategory(category);
+    return pushText(userId, formatResults(results, category));
+  }
+
+  // ── 關鍵字搜尋 /搜尋 React ──
+  if (text.startsWith('/搜尋')) {
+    const keyword = text.replace('/搜尋', '').trim();
+    if (!keyword) return replyText(event.replyToken, '請輸入關鍵字，例如：/搜尋 React');
+
+    await replyText(event.replyToken, `🔍 搜尋「${keyword}」中...`);
+    const results = await queryByKeyword(keyword);
+    return pushText(userId, formatResults(results, keyword));
+  }
+
+  // ── 說明 ──
+  if (text === '說明' || text === '/help') {
+    const help =
+      `📌 使用說明\n\n` +
+      `🧵 貼上 Threads 連結\n→ 自動分類並儲存到 Notion\n\n` +
+      `📂 /分類 科技\n→ 查詢指定分類的文章\n\n` +
+      `🔍 /搜尋 關鍵字\n→ 關鍵字搜尋文章\n\n` +
+      `可用分類：科技、設計、商業、行銷、健康、美食、旅遊、娛樂、教育、生活、時事、其他`;
+    return replyText(event.replyToken, help);
+  }
+
+  // ── 預設 ──
+  await replyText(event.replyToken, '貼上 Threads 連結來收藏文章 🧵\n傳「說明」查看使用方式');
+}
+
+// ── 回覆工具 ─────────────────────────────────────────────
+
+function replyText(replyToken, text) {
+  return client.replyMessage({
+    replyToken,
+    messages: [{ type: 'text', text }],
+  });
+}
+
+function pushText(userId, text) {
+  return client.pushMessage({
+    to: userId,
+    messages: [{ type: 'text', text }],
   });
 }
 
