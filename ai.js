@@ -1,3 +1,9 @@
+const Anthropic = require('@anthropic-ai/sdk');
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
 // 各分類對應的關鍵字
 const CATEGORY_RULES = [
   {
@@ -114,7 +120,7 @@ const CATEGORY_RULES = [
   },
 ];
 
-// 計算每個分類的命中關鍵字數
+// 關鍵字規則分類
 function scoreContent(content) {
   const lowerContent = content.toLowerCase();
   const scores = CATEGORY_RULES.map(({ category, keywords }) => {
@@ -124,50 +130,55 @@ function scoreContent(content) {
   return scores.sort((a, b) => b.score - a.score);
 }
 
-// 產生簡單摘要（取前 35 字）
-function generateSummary(content) {
-  const cleaned = content.replace(/\n+/g, ' ').trim();
-  if (cleaned.length <= 35) return cleaned;
-
-  const sentenceBreaks = ['。', '？', '！', '…'];
-  for (const bp of sentenceBreaks) {
-    const idx = cleaned.indexOf(bp);
-    if (idx > 0 && idx <= 35) return cleaned.slice(0, idx + 1);
-  }
-
-  const idx = cleaned.indexOf('，');
-  if (idx > 0 && idx <= 35) return cleaned.slice(0, idx);
-
-  return cleaned.slice(0, 35) + '...';
+// Claude API 產生標題與摘要
+async function generateTitleAndSummary(content) {
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', // 用 Haiku 速度快、費用低
+      max_tokens: 200,
+      messages: [{
+        role: 'user',
+        content: `請根據以下文章內容，以 JSON 格式回傳（只回傳 JSON，不要加任何說明或 markdown）：
+{
+  "title": "10個字以內的繁體中文標題，精準捕捉文章核心",
+  "summary": "30個字以內的繁體中文摘要，說明文章重點"
 }
 
-// 產生標題（取前 10 字）
-function generateTitle(content) {
-  const cleaned = content.replace(/\n+/g, ' ').trim();
-  if (cleaned.length <= 10) return cleaned;
+文章內容：${content}`,
+      }],
+    });
 
-  const breakPoints = ['。', '？', '！', '，', '、', '…', ' '];
-  for (const bp of breakPoints) {
-    const idx = cleaned.indexOf(bp);
-    if (idx > 0 && idx <= 10) return cleaned.slice(0, idx);
+    const raw = response.content[0].text.trim();
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+
+    // 防呆：超過字數就截斷
+    return {
+      title: parsed.title?.slice(0, 10) || content.slice(0, 10),
+      summary: parsed.summary?.slice(0, 30) || content.slice(0, 30),
+    };
+  } catch (err) {
+    console.error('Claude API error:', err.message);
+    // API 失敗時回退到截斷版本
+    return {
+      title: content.replace(/\n+/g, ' ').trim().slice(0, 10),
+      summary: content.replace(/\n+/g, ' ').trim().slice(0, 30),
+    };
   }
-  return cleaned.slice(0, 10);
 }
 
 async function classifyContent(content, username) {
+  // 分類：關鍵字規則（不需要 API）
   const scores = scoreContent(content);
   const best = scores[0];
-
-  // 沒有任何關鍵字命中 → 歸入其他
   const category = best.score > 0 ? best.category : '其他';
-
   console.log(`[分類] @${username} → ${category}（命中 ${best.score} 個關鍵字：${best.hits.slice(0, 3).join('、')}）`);
 
-  return {
-    title: generateTitle(content),
-    summary: generateSummary(content),
-    category,
-  };
+  // 標題 & 摘要：Claude API
+  const { title, summary } = await generateTitleAndSummary(content);
+  console.log(`[AI] 標題：${title}／摘要：${summary}`);
+
+  return { title, summary, category };
 }
 
 module.exports = { classifyContent };
