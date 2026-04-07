@@ -1,5 +1,4 @@
 const { Client } = require('@notionhq/client');
-
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 const DATABASE_ID = process.env.NOTION_DATABASE_ID;
 
@@ -31,7 +30,6 @@ async function saveToNotion({ title, url, username, content, summary, category, 
         },
       },
     });
-
     return { success: true, pageId: response.id };
   } catch (err) {
     console.error('Notion save error:', err.message);
@@ -50,7 +48,6 @@ async function queryByCategory(category) {
       sorts: [{ property: 'Date', direction: 'descending' }],
       page_size: 5,
     });
-
     return response.results.map(formatPage);
   } catch (err) {
     console.error('Notion query error:', err.message);
@@ -73,10 +70,25 @@ async function queryByKeyword(keyword) {
       sorts: [{ property: 'Date', direction: 'descending' }],
       page_size: 5,
     });
-
     return response.results.map(formatPage);
   } catch (err) {
     console.error('Notion keyword query error:', err.message);
+    return [];
+  }
+}
+
+// ── 新增：最新 N 筆 ──────────────────────────────────────
+
+async function queryRecent(limit = 10) {
+  try {
+    const response = await notion.databases.query({
+      database_id: DATABASE_ID,
+      sorts: [{ property: 'Date', direction: 'descending' }],
+      page_size: limit,
+    });
+    return response.results.map(formatPage);
+  } catch (err) {
+    console.error('Notion recent query error:', err.message);
     return [];
   }
 }
@@ -93,4 +105,4 @@ function formatPage(page) {
   };
 }
 
-module.exports = { saveToNotion, queryByCategory, queryByKeyword };
+module.exports = { saveToNotion, queryByCategory, queryByKeyword, queryRecent };
