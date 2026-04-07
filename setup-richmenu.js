@@ -39,9 +39,9 @@ async function createRichMenu() {
 
   // 2. 上傳背景圖
   const imageRes = await axios.get(
-    'https://placehold.co/2500x843/ff69b4/ffffff/png?text=近10筆+|+找分類+|+指定文章',
-    { responseType: 'arraybuffer' }
-  );
+  'https://upload.cc/i1/2026/04/07/aQloFK.png',
+  { responseType: 'arraybuffer' }
+);
   await axios.post(
     `https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`,
     imageRes.data,
