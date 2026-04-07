@@ -140,8 +140,8 @@ async function generateTitleAndSummary(content) {
         role: 'user',
         content: `請根據以下文章內容，以 JSON 格式回傳（只回傳 JSON，不要加任何說明或 markdown）：
 {
-  "title": "10個字以內的繁體中文標題，精準捕捉文章核心",
-  "summary": "30個字以內的繁體中文摘要，說明文章重點"
+  "title": "15個字以內的繁體中文標題，精準捕捉文章核心",
+  "summary": "40個字以內的繁體中文摘要，說明文章重點"
 }
 
 文章內容：${content}`,
@@ -154,15 +154,15 @@ async function generateTitleAndSummary(content) {
 
     // 防呆：超過字數就截斷
     return {
-      title: parsed.title?.slice(0, 10) || content.slice(0, 10),
-      summary: parsed.summary?.slice(0, 30) || content.slice(0, 30),
+      title: parsed.title?.slice(0, 15) || content.slice(0, 15),
+      summary: parsed.summary?.slice(0, 40) || content.slice(0, 40),
     };
   } catch (err) {
     console.error('Claude API error:', err.message);
     // API 失敗時回退到截斷版本
     return {
-      title: content.replace(/\n+/g, ' ').trim().slice(0, 10),
-      summary: content.replace(/\n+/g, ' ').trim().slice(0, 30),
+      title: content.replace(/\n+/g, ' ').trim().slice(0, 15),
+      summary: content.replace(/\n+/g, ' ').trim().slice(0, 40),
     };
   }
 }
