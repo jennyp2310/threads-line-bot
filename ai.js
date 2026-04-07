@@ -124,16 +124,34 @@ function scoreContent(content) {
   return scores.sort((a, b) => b.score - a.score);
 }
 
-// 產生簡單摘要（取前 60 字）
+// 產生簡單摘要（取前 35 字）
 function generateSummary(content) {
   const cleaned = content.replace(/\n+/g, ' ').trim();
-  return cleaned.length > 60 ? cleaned.slice(0, 60) + '...' : cleaned;
+  if (cleaned.length <= 35) return cleaned;
+
+  const sentenceBreaks = ['。', '？', '！', '…'];
+  for (const bp of sentenceBreaks) {
+    const idx = cleaned.indexOf(bp);
+    if (idx > 0 && idx <= 35) return cleaned.slice(0, idx + 1);
+  }
+
+  const idx = cleaned.indexOf('，');
+  if (idx > 0 && idx <= 35) return cleaned.slice(0, idx);
+
+  return cleaned.slice(0, 35) + '...';
 }
 
-// 產生標題（取前 15 字）
+// 產生標題（取前 10 字）
 function generateTitle(content) {
   const cleaned = content.replace(/\n+/g, ' ').trim();
-  return cleaned.length > 15 ? cleaned.slice(0, 15) + '...' : cleaned;
+  if (cleaned.length <= 10) return cleaned;
+
+  const breakPoints = ['。', '？', '！', '，', '、', '…', ' '];
+  for (const bp of breakPoints) {
+    const idx = cleaned.indexOf(bp);
+    if (idx > 0 && idx <= 10) return cleaned.slice(0, idx);
+  }
+  return cleaned.slice(0, 10);
 }
 
 async function classifyContent(content, username) {
