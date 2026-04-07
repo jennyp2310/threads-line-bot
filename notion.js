@@ -29,9 +29,6 @@ async function saveToNotion({ title, url, username, content, summary, category, 
         'Date': {
           date: { start: new Date().toISOString() },
         },
-        'Post Date': {
-          date: postDate ? { start: postDate } : null,
-        },
       },
     });
 
