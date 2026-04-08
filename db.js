@@ -6,22 +6,27 @@ const supabase = createClient(
 
 // ── 用戶：找不到就自動建立 ────────────────────────────────
 async function getOrCreateUser(lineUserId) {
-  let { data: user } = await supabase
+  const { data: existingUser } = await supabase
     .from('users')
     .select('*')
     .eq('line_user_id', lineUserId)
+    .maybeSingle();
+
+  if (existingUser) return existingUser;
+
+  const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const { data: newUser, error } = await supabase
+    .from('users')
+    .insert({ line_user_id: lineUserId, token })
+    .select()
     .single();
 
-  if (!user) {
-    const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const { data: newUser } = await supabase
-      .from('users')
-      .insert({ line_user_id: lineUserId, token })
-      .select()
-      .single();
-    user = newUser;
+  if (error) {
+    console.error('建立用戶失敗:', error.message);
+    throw new Error('建立用戶失敗：' + error.message);
   }
-  return user;
+
+  return newUser;
 }
 
 // ── 儲存文章 ─────────────────────────────────────────────
@@ -89,7 +94,7 @@ async function getUserByToken(token) {
     .from('users')
     .select('*')
     .eq('token', token)
-    .single();
+    .maybeSingle();
   return data;
 }
 
