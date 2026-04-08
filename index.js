@@ -29,7 +29,6 @@ const client = new line.messagingApi.MessagingApiClient({
 });
 
 const app = express();
-app.use(express.json());
 
 // ── URL 工具函式 ──────────────────────────────────────────
 
@@ -321,6 +320,8 @@ function pushFlex(userId, altText, bubbles) {
 }
 
 // ── 分類管理 API（給網頁用）──────────────────────────────
+
+app.use('/api', express.json());
 
 app.post('/api/categories/add', async (req, res) => {
   const { token, name } = req.body;
