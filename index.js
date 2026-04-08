@@ -374,6 +374,10 @@ app.get('/me', async (req, res) => {
     getCategoriesByUserId(user.id),
   ]);
 
+  const categoryOptions = categories.map(c =>
+    `<option value="${c}" ${category === c ? 'selected' : ''}>${c}</option>`
+  ).join('');
+  
   const featuredCard = articles[0] ? `
     <div class="featured">
       <div class="featured-label">最新收藏</div>
