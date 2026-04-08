@@ -9,6 +9,10 @@ const {
   queryRecent,
   getUserByToken,
   getArticlesByUserId,
+  getCategories,
+  addCategory,
+  deleteCategory,
+  getCategoriesByUserId,
 } = require('./db');
 const { createRichMenu } = require('./setup-richmenu');
 
@@ -108,7 +112,8 @@ async function handleMessage(event) {
         return pushText(userId, '⚠️ 無法讀取文章內容，可能是私人帳號或 Threads 擋爬蟲。\n\n連結已記錄：' + parsed.cleanUrl);
       }
 
-      const aiResult = await classifyContent(content, parsed.username);
+      const userCats = await getCategories(userId);
+      const aiResult = await classifyContent(content, parsed.username, userCats);
 
       const saved = await saveArticle(userId, {
         title: aiResult.title,
@@ -148,19 +153,16 @@ async function handleMessage(event) {
     return pushFlex(userId, '📋 最新收藏', buildCards(results));
   }
 
-  // ── 找分類（Quick Reply）──
+  // ── 找分類（Quick Reply，動態讀用戶分類）──
   if (text === '/找分類') {
+    const cats = await getCategories(userId);
     return client.replyMessage({
       replyToken: event.replyToken,
       messages: [{
         type: 'text',
         text: '請選擇要查看的分類：',
         quickReply: {
-          items: [
-            '各種科技','給我錢','漂亮美眉','各種商業','各種行銷',
-            '健康寶寶','好吃的','我要出去玩！','好看的',
-            '學到2','各種時事','生活2266','其他',
-          ].map(cat => ({
+          items: cats.slice(0, 13).map(cat => ({
             type: 'action',
             action: { type: 'message', label: cat, text: `/分類 ${cat}` },
           })),
@@ -203,6 +205,40 @@ async function handleMessage(event) {
     return pushFlex(userId, `🔍 ${keyword}`, buildCards(results));
   }
 
+  // ── 查看我的分類 ──
+  if (text === '/我的分類' || text === '我的分類') {
+    const cats = await getCategories(userId);
+    return replyText(event.replyToken,
+      `📋 你的分類清單（共 ${cats.length} 個）：\n\n${cats.join('、')}\n\n` +
+      `➕ 新增：/新增分類 分類名稱\n` +
+      `🗑 刪除：/刪除分類 分類名稱`
+    );
+  }
+
+  // ── 新增分類 ──
+  if (text.startsWith('/新增分類')) {
+    const name = text.replace('/新增分類', '').trim();
+    if (!name) return replyText(event.replyToken, '請輸入分類名稱，例如：/新增分類 我的最愛');
+    const result = await addCategory(userId, name);
+    return replyText(event.replyToken,
+      result.success
+        ? `✅ 已新增分類「${name}」`
+        : `❌ 新增失敗：${result.error}`
+    );
+  }
+
+  // ── 刪除分類 ──
+  if (text.startsWith('/刪除分類')) {
+    const name = text.replace('/刪除分類', '').trim();
+    if (!name) return replyText(event.replyToken, '請輸入要刪除的分類名稱，例如：/刪除分類 其他');
+    const result = await deleteCategory(userId, name);
+    return replyText(event.replyToken,
+      result.success
+        ? `🗑 已刪除分類「${name}」`
+        : `❌ 刪除失敗：${result.error}`
+    );
+  }
+
   // ── 我的收藏頁 ──
   if (text === '我的收藏' || text === '/我的收藏') {
     const user = await getOrCreateUser(userId);
@@ -217,11 +253,13 @@ async function handleMessage(event) {
     const help =
       `📌 使用說明\n\n` +
       `🧵 貼上 Threads 連結\n→ 自動分類並儲存\n\n` +
-      `📋 近10筆\n→ 查看最新收藏的 10 篇\n\n` +
-      `📂 找分類\n→ 選擇分類瀏覽文章\n\n` +
+      `📋 /近10筆\n→ 查看最新收藏的 10 篇\n\n` +
+      `📂 /找分類\n→ 選擇分類瀏覽文章\n\n` +
       `🔍 *關鍵字\n→ 例如輸入 *AI 搜尋文章\n\n` +
       `📚 我的收藏\n→ 取得專屬網頁收藏頁\n\n` +
-      `可用分類：各種科技、給我錢、漂亮美眉、各種商業、各種行銷、健康寶寶、好吃的、我要出去玩！、好看的、學到2、各種時事、生活2266、其他`;
+      `📋 我的分類\n→ 查看／新增／刪除分類\n\n` +
+      `➕ /新增分類 名稱\n→ 新增自訂分類\n\n` +
+      `🗑 /刪除分類 名稱\n→ 刪除分類`;
     return replyText(event.replyToken, help);
   }
 
@@ -325,13 +363,10 @@ app.get('/me', async (req, res) => {
   const user = await getUserByToken(token);
   if (!user) return res.status(403).send('無效的連結');
 
-  const articles = await getArticlesByUserId(user.id, { category, keyword });
-
-  const categories = [
-    '各種科技','給我錢','漂亮美眉','各種商業','各種行銷',
-    '健康寶寶','好吃的','我要出去玩！','好看的',
-    '學到2','各種時事','生活2266','其他',
-  ];
+  const [articles, categories] = await Promise.all([
+    getArticlesByUserId(user.id, { category, keyword }),
+    getCategoriesByUserId(user.id),
+  ]);
 
   const cards = articles.map(a => `
     <div class="card">
