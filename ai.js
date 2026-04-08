@@ -167,17 +167,51 @@ async function generateTitleAndSummary(content) {
   }
 }
 
-async function classifyContent(content, username) {
-  // 分類：關鍵字規則（不需要 API）
+async function classifyContent(content, username, userCats) {
+  // 如果有用戶自訂分類，用 Claude 來分類
+  if (userCats && userCats.length > 0) {
+    try {
+      const response = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{
+          role: 'user',
+          content: `請根據以下文章內容，以 JSON 格式回傳（只回傳 JSON，不要加任何說明或 markdown）：
+{
+  "title": "15個字以內的繁體中文標題，精準捕捉文章核心",
+  "summary": "40個字以內的繁體中文摘要，說明文章重點",
+  "category": "從以下分類中選一個最符合的：${userCats.join('、')}"
+}
+
+文章內容：${content}`,
+        }],
+      });
+
+      const raw = response.content[0].text.trim();
+      const clean = raw.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+
+      const category = userCats.includes(parsed.category) ? parsed.category : userCats[userCats.length - 1];
+
+      console.log(`[AI分類] @${username} → ${category}`);
+
+      return {
+        title: parsed.title?.slice(0, 15) || content.slice(0, 15),
+        summary: parsed.summary?.slice(0, 40) || content.slice(0, 40),
+        category,
+      };
+    } catch (err) {
+      console.error('Claude classify error:', err.message);
+    }
+  }
+
+  // fallback：關鍵字規則
   const scores = scoreContent(content);
   const best = scores[0];
   const category = best.score > 0 ? best.category : '其他';
-  console.log(`[分類] @${username} → ${category}（命中 ${best.score} 個關鍵字：${best.hits.slice(0, 3).join('、')}）`);
+  console.log(`[關鍵字分類] @${username} → ${category}`);
 
-  // 標題 & 摘要：Claude API
   const { title, summary } = await generateTitleAndSummary(content);
-  console.log(`[AI] 標題：${title}／摘要：${summary}`);
-
   return { title, summary, category };
 }
 
