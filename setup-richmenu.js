@@ -46,7 +46,7 @@ async function createRichMenu() {
   console.log('✅ Step 1 建立成功：', richMenuId);
 
   const imageRes = await axios.get(
-    'https://upload.cc/i1/2026/04/09/gXsUk3.png', // 待換新圖
+    'https://upload.cc/i1/2026/04/09/mEgAly.png', // 待換新圖
     { responseType: 'arraybuffer' }
   );
   await axios.post(
