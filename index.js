@@ -17,6 +17,7 @@ const {
   deleteCategoryByUserId,
   renameCategoryById,
   updateArticleCategory,
+  deleteArticle,
 } = require('./db');
 const { createRichMenu } = require('./setup-richmenu');
 
@@ -360,6 +361,15 @@ app.post('/api/articles/update-category', async (req, res) => {
   res.json(result);
 });
 
+app.post('/api/articles/delete', async (req, res) => {
+  const { token, articleId } = req.body;
+  if (!token || !articleId) return res.status(400).json({ error: '缺少參數' });
+  const user = await getUserByToken(token);
+  if (!user) return res.status(403).json({ error: '無效 token' });
+  const result = await deleteArticle(user.id, articleId);
+  res.json(result);
+});
+
 // ── Web 收藏頁（雜誌風格）────────────────────────────────
 
 app.get('/me', async (req, res) => {
@@ -377,9 +387,9 @@ app.get('/me', async (req, res) => {
   const categoryOptions = categories.map(c =>
     `<option value="${c}" ${category === c ? 'selected' : ''}>${c}</option>`
   ).join('');
-  
+
   const featuredCard = articles[0] ? `
-    <div class="featured">
+    <div class="featured" id="card-${articles[0].id}">
       <div class="featured-label">最新收藏</div>
       <div class="featured-title">${articles[0].title || '無標題'}</div>
       <div class="featured-summary">${articles[0].summary || ''}</div>
@@ -390,31 +400,33 @@ app.get('/me', async (req, res) => {
         </div>
         <a class="read-link" href="${articles[0].url}" target="_blank">閱讀全文 →</a>
       </div>
-      <div class="card-cat-edit" style="margin-top:12px;">
+      <div class="card-actions" style="margin-top:12px;">
         <select class="cat-select" onchange="updateCat('${articles[0].id}', this)">
           ${categories.map(c => `<option value="${c}" ${articles[0].category === c ? 'selected' : ''}>${c}</option>`).join('')}
         </select>
+        <button class="delete-btn" onclick="deleteArticleById('${articles[0].id}')">刪除</button>
       </div>
     </div>
     <div class="divider"></div>
   ` : '';
 
   const restCards = articles.slice(1).map(a => `
-  <div class="card">
-    <div class="card-cat">${a.category || ''}</div>
-    <div class="card-title">${a.title || '無標題'}</div>
-    <div class="card-summary">${a.summary || ''}</div>
-    <div class="card-footer">
-      <span class="meta-text">👤 ${a.username || ''}　${a.saved_at ? a.saved_at.slice(0,10) : ''}</span>
-      <a class="read-link-sm" href="${a.url}" target="_blank">閱讀 →</a>
+    <div class="card" id="card-${a.id}">
+      <div class="card-cat">${a.category || ''}</div>
+      <div class="card-title">${a.title || '無標題'}</div>
+      <div class="card-summary">${a.summary || ''}</div>
+      <div class="card-footer">
+        <span class="meta-text">👤 ${a.username || ''}　${a.saved_at ? a.saved_at.slice(0,10) : ''}</span>
+        <a class="read-link-sm" href="${a.url}" target="_blank">閱讀 →</a>
+      </div>
+      <div class="card-actions">
+        <select class="cat-select" onchange="updateCat('${a.id}', this)">
+          ${categories.map(c => `<option value="${c}" ${a.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+        <button class="delete-btn" onclick="deleteArticleById('${a.id}')">刪除</button>
+      </div>
     </div>
-    <div class="card-cat-edit">
-      <select class="cat-select" onchange="updateCat('${a.id}', this)">
-        ${categories.map(c => `<option value="${c}" ${a.category === c ? 'selected' : ''}>${c}</option>`).join('')}
-      </select>
-    </div>
-  </div>
-`).join('');
+  `).join('');
 
   res.send(`<!DOCTYPE html>
 <html lang="zh-TW">
@@ -478,9 +490,12 @@ app.get('/me', async (req, res) => {
     .cat-add button:hover { background: #C8522A; }
     .cat-msg { font-size: 12px; min-height: 18px; margin-top: 4px; }
     .cat-hint { font-size: 11px; color: #aaa; margin-bottom: 12px; }
-    .card-cat-edit { margin-top: 10px; border-top: 0.5px solid #eee; padding-top: 10px; }
+    .card-actions { display: flex; gap: 8px; margin-top: 10px; border-top: 0.5px solid #eee; padding-top: 10px; }
+    .card-actions .cat-select { flex: 1; }
     .cat-select { width: 100%; padding: 6px 10px; border: 0.5px solid #bbb; background: #fff; font-family: 'DM Sans', sans-serif; font-size: 12px; outline: none; cursor: pointer; }
     .cat-select:focus { border-color: #1a1a18; }
+    .delete-btn { background: none; border: 0.5px solid #ccc; padding: 6px 12px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: #aaa; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
+    .delete-btn:hover { background: #C8522A; color: #fff; border-color: #C8522A; }
   </style>
 </head>
 <body>
@@ -527,23 +542,40 @@ app.get('/me', async (req, res) => {
   <script>
     const TOKEN = '${token}';
     let cats = ${JSON.stringify(categories)};
-    
-    async function updateCat(articleId, selectEl) {
-  const category = selectEl.value;
-  const res = await fetch('/api/articles/update-category', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: TOKEN, articleId, category }),
-  });
-  const data = await res.json();
-  if (data.success) {
-    showMsg('✅ 分類已更新為「' + category + '」');
-  } else {
-    showMsg('❌ ' + data.error, true);
-  }
-}
 
-   function renderCats() {
+    async function updateCat(articleId, selectEl) {
+      const category = selectEl.value;
+      const res = await fetch('/api/articles/update-category', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: TOKEN, articleId, category }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showMsg('✅ 分類已更新為「' + category + '」');
+      } else {
+        showMsg('❌ ' + data.error, true);
+      }
+    }
+
+    async function deleteArticleById(articleId) {
+      if (!confirm('確定刪除這篇文章？')) return;
+      const res = await fetch('/api/articles/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: TOKEN, articleId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const card = document.getElementById('card-' + articleId);
+        if (card) card.remove();
+        showMsg('🗑 文章已刪除');
+      } else {
+        showMsg('❌ ' + data.error, true);
+      }
+    }
+
+    function renderCats() {
       const list = document.getElementById('catList');
       list.innerHTML = cats.map(c => \`
         <div class="cat-item">
