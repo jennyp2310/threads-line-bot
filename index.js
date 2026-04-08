@@ -250,23 +250,23 @@ async function handleMessage(event) {
 
   // ── 說明 ──
   if (text === '說明' || text === '/help') {
-  const help =
-    `📌 使用說明\n\n` +
-    `🧵 貼上 Threads 連結\n→ 自動分類並儲存\n\n` +
-    `────────────────\n` +
-    `下方選單快速操作：\n\n` +
-    `📋 近10筆\n→ 查看最新收藏的 10 篇\n\n` +
-    `📂 找分類\n→ 選擇分類瀏覽文章\n\n` +
-    `🔍 指定文章\n→ 輸入 *關鍵字 搜尋，例如：*AI\n\n` +
-    `📚 我的收藏\n→ 開啟專屬網頁收藏頁\n\n` +
-    `────────────────\n` +
-    `分類管理：\n\n` +
-    `📋 我的分類\n→ 查看目前所有分類\n\n` +
-    `➕ /新增分類 名稱\n→ 例如：/新增分類 工作靈感\n\n` +
-    `🗑 /刪除分類 名稱\n→ 例如：/刪除分類 其他\n\n` +
-    `✏️ /改名分類 舊名稱 新名稱\n→ 例如：/改名分類 生活2266 日常生活`;
-  return replyText(event.replyToken, help);
-}
+    const help =
+      `📌 使用說明\n\n` +
+      `🧵 貼上 Threads 連結\n→ 自動分類並儲存\n\n` +
+      `────────────────\n` +
+      `下方選單快速操作：\n\n` +
+      `📋 近10筆\n→ 查看最新收藏的 10 篇\n\n` +
+      `📂 找分類\n→ 選擇分類瀏覽文章\n\n` +
+      `🔍 指定文章\n→ 輸入 *關鍵字 搜尋，例如：*AI\n\n` +
+      `📚 我的收藏\n→ 開啟專屬網頁收藏頁\n\n` +
+      `────────────────\n` +
+      `分類管理：\n\n` +
+      `📋 我的分類\n→ 查看目前所有分類\n\n` +
+      `➕ /新增分類 名稱\n→ 例如：/新增分類 工作靈感\n\n` +
+      `🗑 /刪除分類 名稱\n→ 例如：/刪除分類 其他\n\n` +
+      `✏️ /改名分類 舊名稱 新名稱\n→ 例如：/改名分類 生活2266 日常生活`;
+    return replyText(event.replyToken, help);
+  }
 
   // ── 預設 ──
   await replyText(event.replyToken, '貼上 Threads 連結來收藏文章 🧵\n傳「說明」查看使用方式');
@@ -310,7 +310,7 @@ function buildCards(items) {
           type: 'text',
           text: item.category || '',
           size: 'sm',
-          color: '#ff69b4',
+          color: '#C8522A',
         },
         {
           type: 'text',
@@ -359,7 +359,7 @@ function pushFlex(userId, altText, bubbles) {
   });
 }
 
-// ── Web 收藏頁 ────────────────────────────────────────────
+// ── Web 收藏頁（雜誌風格）────────────────────────────────
 
 app.get('/me', async (req, res) => {
   const { token, category, keyword } = req.query;
@@ -373,13 +373,31 @@ app.get('/me', async (req, res) => {
     getCategoriesByUserId(user.id),
   ]);
 
-  const cards = articles.map(a => `
+  const featuredCard = articles[0] ? `
+    <div class="featured">
+      <div class="featured-label">最新收藏</div>
+      <div class="featured-title">${articles[0].title || '無標題'}</div>
+      <div class="featured-summary">${articles[0].summary || ''}</div>
+      <div class="featured-footer">
+        <div class="featured-meta">
+          <span class="cat-tag">${articles[0].category || ''}</span>
+          <span class="meta-text">👤 ${articles[0].username || ''}　📅 ${articles[0].saved_at ? articles[0].saved_at.slice(0,10) : ''}</span>
+        </div>
+        <a class="read-link" href="${articles[0].url}" target="_blank">閱讀全文 →</a>
+      </div>
+    </div>
+    <div class="divider"></div>
+  ` : '';
+
+  const restCards = articles.slice(1).map(a => `
     <div class="card">
-      <div class="card-category">${a.category || ''}</div>
+      <div class="card-cat">${a.category || ''}</div>
       <div class="card-title">${a.title || '無標題'}</div>
       <div class="card-summary">${a.summary || ''}</div>
-      <div class="card-meta">👤 ${a.username || ''}　📅 ${a.saved_at ? a.saved_at.slice(0,10) : ''}</div>
-      <a class="card-link" href="${a.url}" target="_blank">開啟文章 →</a>
+      <div class="card-footer">
+        <span class="meta-text">👤 ${a.username || ''}　${a.saved_at ? a.saved_at.slice(0,10) : ''}</span>
+        <a class="read-link-sm" href="${a.url}" target="_blank">閱讀 →</a>
+      </div>
     </div>
   `).join('');
 
@@ -393,44 +411,76 @@ app.get('/me', async (req, res) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>我的 Threads 收藏</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, sans-serif; background: #f5f5f5; color: #333; }
-    header { background: #ff69b4; color: white; padding: 20px; text-align: center; }
-    header h1 { font-size: 1.4rem; }
-    header p { font-size: 0.85rem; opacity: 0.85; margin-top: 4px; }
-    .search-bar { background: white; padding: 16px; display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid #eee; }
-    .search-bar input { flex: 1; min-width: 150px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
-    .search-bar select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
-    .search-bar button { padding: 8px 16px; background: #ff69b4; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
-    .container { max-width: 680px; margin: 0 auto; padding: 16px; }
-    .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-    .card-category { font-size: 0.75rem; color: #ff69b4; font-weight: bold; margin-bottom: 6px; }
-    .card-title { font-size: 1rem; font-weight: bold; margin-bottom: 6px; line-height: 1.4; }
-    .card-summary { font-size: 0.875rem; color: #555; margin-bottom: 8px; line-height: 1.5; }
-    .card-meta { font-size: 0.75rem; color: #aaa; margin-bottom: 10px; }
-    .card-link { display: inline-block; font-size: 0.85rem; color: #ff69b4; text-decoration: none; font-weight: bold; }
-    .empty { text-align: center; padding: 60px 20px; color: #aaa; font-size: 0.95rem; }
+    body { font-family: 'DM Sans', -apple-system, sans-serif; background: #FAFAF7; color: #1a1a18; }
+    .header { border-bottom: 3px solid #1a1a18; padding: 20px 20px 14px; display: flex; align-items: flex-end; justify-content: space-between; max-width: 720px; margin: 0 auto; }
+    .logo { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; letter-spacing: -1px; line-height: 1; }
+    .logo span { color: #C8522A; }
+    .header-meta { font-size: 11px; color: #888; letter-spacing: 2px; text-transform: uppercase; text-align: right; line-height: 1.6; }
+    .search-wrap { background: #FAFAF7; border-bottom: 0.5px solid #ccc; padding: 12px 20px; }
+    .search-inner { max-width: 720px; margin: 0 auto; }
+    .search-form { display: flex; gap: 8px; flex-wrap: wrap; }
+    .search-form input { flex: 1; min-width: 140px; padding: 7px 12px; border: 0.5px solid #bbb; background: #fff; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; }
+    .search-form input:focus { border-color: #1a1a18; }
+    .search-form select { padding: 7px 12px; border: 0.5px solid #bbb; background: #fff; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; }
+    .search-form button { background: #1a1a18; color: #FAFAF7; border: none; padding: 7px 18px; font-family: 'DM Sans', sans-serif; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
+    .search-form button:hover { background: #C8522A; }
+    .container { max-width: 720px; margin: 0 auto; padding: 24px 20px; }
+    .featured { padding: 20px 0; }
+    .featured-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: #C8522A; margin-bottom: 10px; }
+    .featured-title { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; line-height: 1.3; margin-bottom: 12px; }
+    .featured-summary { font-size: 14px; color: #444; line-height: 1.7; margin-bottom: 14px; }
+    .featured-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .featured-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .cat-tag { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; background: #1a1a18; color: #FAFAF7; padding: 3px 8px; }
+    .meta-text { font-size: 11px; color: #888; }
+    .read-link { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #1a1a18; text-decoration: none; font-weight: 500; border-bottom: 1px solid #1a1a18; padding-bottom: 1px; white-space: nowrap; }
+    .read-link:hover { color: #C8522A; border-color: #C8522A; }
+    .divider { height: 1px; background: #1a1a18; margin: 4px 0 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #ccc; }
+    @media (max-width: 500px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #FAFAF7; padding: 18px; }
+    .card-cat { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #C8522A; margin-bottom: 8px; }
+    .card-title { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; line-height: 1.4; margin-bottom: 8px; }
+    .card-summary { font-size: 12px; color: #555; line-height: 1.6; margin-bottom: 12px; }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 0.5px solid #ddd; padding-top: 10px; gap: 8px; flex-wrap: wrap; }
+    .read-link-sm { font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: #1a1a18; text-decoration: none; font-weight: 500; border-bottom: 1px solid #1a1a18; padding-bottom: 1px; white-space: nowrap; }
+    .read-link-sm:hover { color: #C8522A; border-color: #C8522A; }
+    .empty { text-align: center; padding: 60px 20px; color: #aaa; font-size: 14px; line-height: 2; }
+    .empty strong { display: block; font-family: 'Playfair Display', serif; font-size: 20px; color: #bbb; margin-bottom: 8px; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>🧵 我的 Threads 收藏</h1>
-    <p>共 ${articles.length} 篇文章</p>
-  </header>
-  <div class="search-bar">
-    <form method="get" action="/me" style="display:flex;gap:8px;flex-wrap:wrap;width:100%">
-      <input type="hidden" name="token" value="${token}">
-      <input type="text" name="keyword" placeholder="搜尋關鍵字..." value="${keyword || ''}">
-      <select name="category">
-        <option value="">全部分類</option>
-        ${categoryOptions}
-      </select>
-      <button type="submit">搜尋</button>
-    </form>
+  <div class="header">
+    <div class="logo">THREAD<span>S</span></div>
+    <div class="header-meta">我的收藏<br>共 ${articles.length} 篇文章</div>
+  </div>
+  <div class="search-wrap">
+    <div class="search-inner">
+      <form class="search-form" method="get" action="/me">
+        <input type="hidden" name="token" value="${token}">
+        <input type="text" name="keyword" placeholder="搜尋關鍵字..." value="${keyword || ''}">
+        <select name="category">
+          <option value="">全部分類</option>
+          ${categoryOptions}
+        </select>
+        <button type="submit">搜尋</button>
+      </form>
+    </div>
   </div>
   <div class="container">
-    ${articles.length > 0 ? cards : '<div class="empty">還沒有收藏文章 😢<br>回到 LINE 貼上 Threads 連結開始收藏！</div>'}
+    ${articles.length === 0 ? `
+      <div class="empty">
+        <strong>尚無收藏文章</strong>
+        回到 LINE 貼上 Threads 連結開始收藏！
+      </div>
+    ` : `
+      ${featuredCard}
+      <div class="grid">${restCards}</div>
+    `}
   </div>
 </body>
 </html>`);
