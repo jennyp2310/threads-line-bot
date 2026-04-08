@@ -1,4 +1,3 @@
-// setup-richmenu.js
 const axios = require('axios');
 
 const TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -8,7 +7,6 @@ const headers = {
 };
 
 async function createRichMenu() {
-  // 1. 建立 Rich Menu 結構
   const { data } = await axios.post(
     'https://api.line.me/v2/bot/richmenu',
     {
@@ -18,16 +16,20 @@ async function createRichMenu() {
       chatBarText: '收集好文！',
       areas: [
         {
-          bounds: { x: 0, y: 0, width: 833, height: 843 },
+          bounds: { x: 0, y: 0, width: 625, height: 843 },
           action: { type: 'message', text: '/近10筆' },
         },
         {
-          bounds: { x: 833, y: 0, width: 834, height: 843 },
+          bounds: { x: 625, y: 0, width: 625, height: 843 },
           action: { type: 'message', text: '/找分類' },
         },
         {
-          bounds: { x: 1667, y: 0, width: 833, height: 843 },
+          bounds: { x: 1250, y: 0, width: 625, height: 843 },
           action: { type: 'message', text: '/搜尋' },
+        },
+        {
+          bounds: { x: 1875, y: 0, width: 625, height: 843 },
+          action: { type: 'message', text: '我的收藏' },
         },
       ],
     },
@@ -37,11 +39,10 @@ async function createRichMenu() {
   const richMenuId = data.richMenuId;
   console.log('✅ Step 1 建立成功：', richMenuId);
 
-  // 2. 上傳背景圖
   const imageRes = await axios.get(
-  'https://upload.cc/i1/2026/04/07/aQloFK.png',
-  { responseType: 'arraybuffer' }
-);
+    'https://upload.cc/i1/2026/04/07/aQloFK.png',
+    { responseType: 'arraybuffer' }
+  );
   await axios.post(
     `https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`,
     imageRes.data,
@@ -54,7 +55,6 @@ async function createRichMenu() {
   );
   console.log('✅ Step 2 圖片上傳成功');
 
-  // 3. 設為預設選單
   await axios.post(
     `https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`,
     {},
