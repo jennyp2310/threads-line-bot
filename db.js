@@ -227,6 +227,17 @@ async function updateArticleCategory(userId, articleId, category) {
   return { success: true };
 }
 
+// ── 刪除文章（網頁用）────────────────────────────────────
+async function deleteArticle(userId, articleId) {
+  const { error } = await supabase
+    .from('articles')
+    .delete()
+    .eq('id', articleId)
+    .eq('user_id', userId);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
 module.exports = {
   getOrCreateUser,
   saveArticle,
@@ -243,4 +254,5 @@ module.exports = {
   deleteCategoryByUserId,
   renameCategoryById,
   updateArticleCategory,
+  deleteArticle,
 };
