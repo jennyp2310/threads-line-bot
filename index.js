@@ -1,6 +1,5 @@
 const express = require('express');
 const line = require('@line/bot-sdk');
-const { classifyContent } = require('./ai');
 const {
   getOrCreateUser,
   saveArticle,
@@ -13,6 +12,9 @@ const {
   addCategory,
   deleteCategory,
   getCategoriesByUserId,
+  addCategoryByUserId,
+  deleteCategoryByUserId,
+  renameCategoryById,
 } = require('./db');
 const { createRichMenu } = require('./setup-richmenu');
 
@@ -358,6 +360,37 @@ function pushFlex(userId, altText, bubbles) {
     }],
   });
 }
+
+// ── 分類管理 API（給網頁用）─────────────────────────────
+
+app.use(express.json());
+
+app.post('/api/categories/add', async (req, res) => {
+  const { token, name } = req.body;
+  if (!token || !name) return res.status(400).json({ error: '缺少參數' });
+  const user = await getUserByToken(token);
+  if (!user) return res.status(403).json({ error: '無效 token' });
+  const result = await addCategoryByUserId(user.id, name);
+  res.json(result);
+});
+
+app.post('/api/categories/delete', async (req, res) => {
+  const { token, name } = req.body;
+  if (!token || !name) return res.status(400).json({ error: '缺少參數' });
+  const user = await getUserByToken(token);
+  if (!user) return res.status(403).json({ error: '無效 token' });
+  const result = await deleteCategoryByUserId(user.id, name);
+  res.json(result);
+});
+
+app.post('/api/categories/rename', async (req, res) => {
+  const { token, oldName, newName } = req.body;
+  if (!token || !oldName || !newName) return res.status(400).json({ error: '缺少參數' });
+  const user = await getUserByToken(token);
+  if (!user) return res.status(403).json({ error: '無效 token' });
+  const result = await renameCategoryById(user.id, oldName, newName);
+  res.json(result);
+});
 
 // ── Web 收藏頁（雜誌風格）────────────────────────────────
 
