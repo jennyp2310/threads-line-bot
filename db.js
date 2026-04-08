@@ -80,12 +80,43 @@ async function addCategory(lineUserId, name) {
 }
 
 // ── 刪除分類 ──────────────────────────────────────────────
-async function deleteCategory(lineUserId, name) {
+async function renameCategory(lineUserId, oldName, newName) {
   const user = await getOrCreateUser(lineUserId);
   const { error } = await supabase
     .from('categories')
-    .delete()
+    .update({ name: newName })
     .eq('user_id', user.id)
+    .eq('name', oldName);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+async function renameCategoryById(userId, oldName, newName) {
+  const { error } = await supabase
+    .from('categories')
+    .update({ name: newName })
+    .eq('user_id', userId)
+    .eq('name', oldName);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+async function addCategoryByUserId(userId, name) {
+  const { error } = await supabase
+    .from('categories')
+    .insert({ user_id: userId, name });
+  if (error) {
+    if (error.code === '23505') return { success: false, error: '分類已存在' };
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+async function deleteCategoryByUserId(userId, name) {
+  const { error } = await supabase
+    .from('categories')
+    .delete()
+    .eq('user_id', userId)
     .eq('name', name);
   if (error) return { success: false, error: error.message };
   return { success: true };
@@ -197,4 +228,8 @@ module.exports = {
   addCategory,
   deleteCategory,
   getCategoriesByUserId,
+  renameCategory,
+  addCategoryByUserId,
+  deleteCategoryByUserId,
+  renameCategoryById,
 };
