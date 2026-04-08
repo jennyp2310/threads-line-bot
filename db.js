@@ -216,6 +216,17 @@ async function renameCategoryById(userId, oldName, newName) {
   return { success: true };
 }
 
+// ── 更新文章分類（網頁用）────────────────────────────────
+async function updateArticleCategory(userId, articleId, category) {
+  const { error } = await supabase
+    .from('articles')
+    .update({ category })
+    .eq('id', articleId)
+    .eq('user_id', userId);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
 module.exports = {
   getOrCreateUser,
   saveArticle,
@@ -231,4 +242,5 @@ module.exports = {
   addCategoryByUserId,
   deleteCategoryByUserId,
   renameCategoryById,
+  updateArticleCategory,
 };
