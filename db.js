@@ -36,9 +36,7 @@ async function getOrCreateUser(lineUserId) {
     throw new Error('建立用戶失敗：' + error.message);
   }
 
-  // 新用戶自動建立預設分類
   await initDefaultCategories(newUser.id);
-
   return newUser;
 }
 
@@ -48,7 +46,7 @@ async function initDefaultCategories(userId) {
   await supabase.from('categories').insert(rows);
 }
 
-// ── 取得用戶分類清單 ──────────────────────────────────────
+// ── 取得用戶分類清單（LINE 用）───────────────────────────
 async function getCategories(lineUserId) {
   const user = await getOrCreateUser(lineUserId);
   const { data } = await supabase
@@ -57,16 +55,15 @@ async function getCategories(lineUserId) {
     .eq('user_id', user.id)
     .order('created_at', { ascending: true });
 
-  // 舊用戶沒有分類時，自動補入預設分類
   if (!data || data.length === 0) {
     await initDefaultCategories(user.id);
     return DEFAULT_CATEGORIES;
   }
-  
-  return (data || []).map(c => c.name);
+
+  return data.map(c => c.name);
 }
 
-// ── 新增分類 ──────────────────────────────────────────────
+// ── 新增分類（LINE 用）───────────────────────────────────
 async function addCategory(lineUserId, name) {
   const user = await getOrCreateUser(lineUserId);
   const { error } = await supabase
@@ -79,44 +76,13 @@ async function addCategory(lineUserId, name) {
   return { success: true };
 }
 
-// ── 刪除分類 ──────────────────────────────────────────────
-async function renameCategory(lineUserId, oldName, newName) {
+// ── 刪除分類（LINE 用）───────────────────────────────────
+async function deleteCategory(lineUserId, name) {
   const user = await getOrCreateUser(lineUserId);
   const { error } = await supabase
     .from('categories')
-    .update({ name: newName })
-    .eq('user_id', user.id)
-    .eq('name', oldName);
-  if (error) return { success: false, error: error.message };
-  return { success: true };
-}
-
-async function renameCategoryById(userId, oldName, newName) {
-  const { error } = await supabase
-    .from('categories')
-    .update({ name: newName })
-    .eq('user_id', userId)
-    .eq('name', oldName);
-  if (error) return { success: false, error: error.message };
-  return { success: true };
-}
-
-async function addCategoryByUserId(userId, name) {
-  const { error } = await supabase
-    .from('categories')
-    .insert({ user_id: userId, name });
-  if (error) {
-    if (error.code === '23505') return { success: false, error: '分類已存在' };
-    return { success: false, error: error.message };
-  }
-  return { success: true };
-}
-
-async function deleteCategoryByUserId(userId, name) {
-  const { error } = await supabase
-    .from('categories')
     .delete()
-    .eq('user_id', userId)
+    .eq('user_id', user.id)
     .eq('name', name);
   if (error) return { success: false, error: error.message };
   return { success: true };
@@ -181,7 +147,7 @@ async function queryRecent(lineUserId, limit = 10) {
   return data || [];
 }
 
-// ── 用 token 查詢用戶（給網頁用）────────────────────────
+// ── 用 token 查詢用戶（網頁用）──────────────────────────
 async function getUserByToken(token) {
   const { data } = await supabase
     .from('users')
@@ -191,7 +157,7 @@ async function getUserByToken(token) {
   return data;
 }
 
-// ── 用 userId 查詢文章（給網頁用）───────────────────────
+// ── 用 userId 查詢文章（網頁用）─────────────────────────
 async function getArticlesByUserId(userId, { category, keyword } = {}) {
   let query = supabase
     .from('articles')
@@ -206,7 +172,7 @@ async function getArticlesByUserId(userId, { category, keyword } = {}) {
   return data || [];
 }
 
-// ── 用 userId 取得分類（給網頁用）───────────────────────
+// ── 用 userId 取得分類（網頁用）─────────────────────────
 async function getCategoriesByUserId(userId) {
   const { data } = await supabase
     .from('categories')
@@ -214,6 +180,40 @@ async function getCategoriesByUserId(userId) {
     .eq('user_id', userId)
     .order('created_at', { ascending: true });
   return (data || []).map(c => c.name);
+}
+
+// ── 新增分類（網頁用）────────────────────────────────────
+async function addCategoryByUserId(userId, name) {
+  const { error } = await supabase
+    .from('categories')
+    .insert({ user_id: userId, name });
+  if (error) {
+    if (error.code === '23505') return { success: false, error: '分類已存在' };
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+// ── 刪除分類（網頁用）────────────────────────────────────
+async function deleteCategoryByUserId(userId, name) {
+  const { error } = await supabase
+    .from('categories')
+    .delete()
+    .eq('user_id', userId)
+    .eq('name', name);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+// ── 改名分類（網頁用）────────────────────────────────────
+async function renameCategoryById(userId, oldName, newName) {
+  const { error } = await supabase
+    .from('categories')
+    .update({ name: newName })
+    .eq('user_id', userId)
+    .eq('name', oldName);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
 }
 
 module.exports = {
@@ -228,7 +228,6 @@ module.exports = {
   addCategory,
   deleteCategory,
   getCategoriesByUserId,
-  renameCategory,
   addCategoryByUserId,
   deleteCategoryByUserId,
   renameCategoryById,
