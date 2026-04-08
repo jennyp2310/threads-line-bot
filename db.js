@@ -56,6 +56,13 @@ async function getCategories(lineUserId) {
     .select('name')
     .eq('user_id', user.id)
     .order('created_at', { ascending: true });
+
+  // 舊用戶沒有分類時，自動補入預設分類
+  if (!data || data.length === 0) {
+    await initDefaultCategories(user.id);
+    return DEFAULT_CATEGORIES;
+  }
+  
   return (data || []).map(c => c.name);
 }
 
