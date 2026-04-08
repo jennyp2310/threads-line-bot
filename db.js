@@ -8,6 +8,12 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
+const DEFAULT_CATEGORIES = [
+  '各種科技','給我錢','漂亮美眉','各種商業','各種行銷',
+  '健康寶寶','好吃的','我要出去玩！','好看的',
+  '學到2','各種時事','生活2266','其他',
+];
+
 // ── 用戶：找不到就自動建立 ────────────────────────────────
 async function getOrCreateUser(lineUserId) {
   const { data: existingUser } = await supabase
@@ -30,7 +36,52 @@ async function getOrCreateUser(lineUserId) {
     throw new Error('建立用戶失敗：' + error.message);
   }
 
+  // 新用戶自動建立預設分類
+  await initDefaultCategories(newUser.id);
+
   return newUser;
+}
+
+// ── 初始化預設分類 ────────────────────────────────────────
+async function initDefaultCategories(userId) {
+  const rows = DEFAULT_CATEGORIES.map(name => ({ user_id: userId, name }));
+  await supabase.from('categories').insert(rows);
+}
+
+// ── 取得用戶分類清單 ──────────────────────────────────────
+async function getCategories(lineUserId) {
+  const user = await getOrCreateUser(lineUserId);
+  const { data } = await supabase
+    .from('categories')
+    .select('name')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true });
+  return (data || []).map(c => c.name);
+}
+
+// ── 新增分類 ──────────────────────────────────────────────
+async function addCategory(lineUserId, name) {
+  const user = await getOrCreateUser(lineUserId);
+  const { error } = await supabase
+    .from('categories')
+    .insert({ user_id: user.id, name });
+  if (error) {
+    if (error.code === '23505') return { success: false, error: '分類已存在' };
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+// ── 刪除分類 ──────────────────────────────────────────────
+async function deleteCategory(lineUserId, name) {
+  const user = await getOrCreateUser(lineUserId);
+  const { error } = await supabase
+    .from('categories')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('name', name);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
 }
 
 // ── 儲存文章 ─────────────────────────────────────────────
@@ -117,6 +168,16 @@ async function getArticlesByUserId(userId, { category, keyword } = {}) {
   return data || [];
 }
 
+// ── 用 userId 取得分類（給網頁用）───────────────────────
+async function getCategoriesByUserId(userId) {
+  const { data } = await supabase
+    .from('categories')
+    .select('name')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+  return (data || []).map(c => c.name);
+}
+
 module.exports = {
   getOrCreateUser,
   saveArticle,
@@ -125,4 +186,8 @@ module.exports = {
   queryRecent,
   getUserByToken,
   getArticlesByUserId,
+  getCategories,
+  addCategory,
+  deleteCategory,
+  getCategoriesByUserId,
 };
