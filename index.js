@@ -16,6 +16,7 @@ const {
   addCategoryByUserId,
   deleteCategoryByUserId,
   renameCategoryById,
+  updateArticleCategory,
 } = require('./db');
 const { createRichMenu } = require('./setup-richmenu');
 
@@ -350,6 +351,15 @@ app.post('/api/categories/rename', async (req, res) => {
   res.json(result);
 });
 
+app.post('/api/articles/update-category', async (req, res) => {
+  const { token, articleId, category } = req.body;
+  if (!token || !articleId || !category) return res.status(400).json({ error: '缺少參數' });
+  const user = await getUserByToken(token);
+  if (!user) return res.status(403).json({ error: '無效 token' });
+  const result = await updateArticleCategory(user.id, articleId, category);
+  res.json(result);
+});
+
 // ── Web 收藏頁（雜誌風格）────────────────────────────────
 
 app.get('/me', async (req, res) => {
@@ -376,25 +386,31 @@ app.get('/me', async (req, res) => {
         </div>
         <a class="read-link" href="${articles[0].url}" target="_blank">閱讀全文 →</a>
       </div>
+      <div class="card-cat-edit" style="margin-top:12px;">
+        <select class="cat-select" onchange="updateCat('${articles[0].id}', this)">
+          ${categories.map(c => `<option value="${c}" ${articles[0].category === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </div>
     </div>
     <div class="divider"></div>
   ` : '';
 
   const restCards = articles.slice(1).map(a => `
-    <div class="card">
-      <div class="card-cat">${a.category || ''}</div>
-      <div class="card-title">${a.title || '無標題'}</div>
-      <div class="card-summary">${a.summary || ''}</div>
-      <div class="card-footer">
-        <span class="meta-text">👤 ${a.username || ''}　${a.saved_at ? a.saved_at.slice(0,10) : ''}</span>
-        <a class="read-link-sm" href="${a.url}" target="_blank">閱讀 →</a>
-      </div>
+  <div class="card">
+    <div class="card-cat">${a.category || ''}</div>
+    <div class="card-title">${a.title || '無標題'}</div>
+    <div class="card-summary">${a.summary || ''}</div>
+    <div class="card-footer">
+      <span class="meta-text">👤 ${a.username || ''}　${a.saved_at ? a.saved_at.slice(0,10) : ''}</span>
+      <a class="read-link-sm" href="${a.url}" target="_blank">閱讀 →</a>
     </div>
-  `).join('');
-
-  const categoryOptions = categories.map(c =>
-    `<option value="${c}" ${category === c ? 'selected' : ''}>${c}</option>`
-  ).join('');
+    <div class="card-cat-edit">
+      <select class="cat-select" onchange="updateCat('${a.id}', this)">
+        ${categories.map(c => `<option value="${c}" ${a.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+    </div>
+  </div>
+`).join('');
 
   res.send(`<!DOCTYPE html>
 <html lang="zh-TW">
@@ -458,6 +474,9 @@ app.get('/me', async (req, res) => {
     .cat-add button:hover { background: #C8522A; }
     .cat-msg { font-size: 12px; min-height: 18px; margin-top: 4px; }
     .cat-hint { font-size: 11px; color: #aaa; margin-bottom: 12px; }
+    .card-cat-edit { margin-top: 10px; border-top: 0.5px solid #eee; padding-top: 10px; }
+    .cat-select { width: 100%; padding: 6px 10px; border: 0.5px solid #bbb; background: #fff; font-family: 'DM Sans', sans-serif; font-size: 12px; outline: none; cursor: pointer; }
+    .cat-select:focus { border-color: #1a1a18; }
   </style>
 </head>
 <body>
@@ -504,8 +523,23 @@ app.get('/me', async (req, res) => {
   <script>
     const TOKEN = '${token}';
     let cats = ${JSON.stringify(categories)};
+    
+    async function updateCat(articleId, selectEl) {
+  const category = selectEl.value;
+  const res = await fetch('/api/articles/update-category', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: TOKEN, articleId, category }),
+  });
+  const data = await res.json();
+  if (data.success) {
+    showMsg('✅ 分類已更新為「' + category + '」');
+  } else {
+    showMsg('❌ ' + data.error, true);
+  }
+}
 
-    function renderCats() {
+   function renderCats() {
       const list = document.getElementById('catList');
       list.innerHTML = cats.map(c => \`
         <div class="cat-item">
