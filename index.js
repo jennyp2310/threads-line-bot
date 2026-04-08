@@ -1,3 +1,10 @@
+async function handleMessage(event) {
+  const text = event.message.text.trim();
+  const userId = event.source.userId;
+  
+  console.log('收到訊息:', text, '來自:', userId); // ← 加這行
+
+  // ... 以下不變
 const express = require('express');
 const line = require('@line/bot-sdk');
 const { classifyContent } = require('./ai');
