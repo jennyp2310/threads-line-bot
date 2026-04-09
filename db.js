@@ -1,3 +1,5 @@
+const { Client } = require('@notionhq/client');
+const notion = new Client({ auth: process.env.NOTION_TOKEN });
 const { createClient } = require('@supabase/supabase-js');
 
 console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
@@ -238,6 +240,67 @@ async function deleteArticle(userId, articleId) {
   return { success: true };
 }
 
+async function saveToNotion({ title, url, content, summary }) {
+  try {
+    // 先讀取現有所有 Tags
+    const db = await notion.databases.retrieve({
+      database_id: process.env.NOTION_DATABASE_ID
+    });
+    const existingTags = db.properties.Tags.multi_select.options.map(o => o.name);
+
+    // 請 Claude 從現有 Tags 選出最符合的（最多3個）
+    const Anthropic = require('@anthropic-ai/sdk');
+    const anthropic = new Anthropic();
+    const tagResponse = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 100,
+      messages: [{
+        role: 'user',
+        content: `你是文章分類助手。
+現有標籤清單：${existingTags.join('、')}
+文章標題：${title}
+文章摘要：${summary}
+
+請從現有標籤中選出最符合的 1~3 個，如果都不適合可以新增 1 個新標籤。
+只回傳標籤，用逗號分隔，不要其他文字。`
+      }]
+    });
+
+    const tags = tagResponse.content[0].text
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean);
+
+    // 寫入 Notion
+    await notion.pages.create({
+      parent: { database_id: process.env.NOTION_DATABASE_ID },
+      properties: {
+        Name: {
+          title: [{ text: { content: title } }]
+        },
+        URL: { url: url },
+        Tags: {
+          multi_select: tags.map(name => ({ name }))
+        }
+      },
+      children: content ? [
+        {
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{ text: { content: content } }]
+          }
+        }
+      ] : []
+    });
+
+    console.log('✅ Notion 儲存成功');
+  } catch (err) {
+    // Notion 失敗不影響主流程
+    console.error('⚠️ Notion 儲存失敗:', err.message);
+  }
+}
+
 module.exports = {
   getOrCreateUser,
   saveArticle,
@@ -255,4 +318,5 @@ module.exports = {
   renameCategoryById,
   updateArticleCategory,
   deleteArticle,
+  saveToNotion,
 };
