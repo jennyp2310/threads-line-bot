@@ -48,6 +48,58 @@ function parseThreadsUrl(text) {
   };
 }
 
+// ── IG URL 工具函式 ───────────────────────────────────────
+
+function isInstagramUrl(text) {
+  return text.includes('instagram.com/p/');
+}
+
+function parseInstagramUrl(text) {
+  const urlMatch = text.match(/https:\/\/www\.instagram\.com\/p\/([\w-]+)/);
+  if (!urlMatch) return null;
+  return {
+    cleanUrl: `https://www.instagram.com/p/${urlMatch[1]}/`,
+    postId: urlMatch[1],
+  };
+}
+
+async function fetchInstagramContent(cleanUrl) {
+  try {
+    const res = await fetch(cleanUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+        'Accept-Language': 'zh-TW,zh;q=0.9',
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+
+    // 抓 og:description
+    const descMatch =
+      html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i) ||
+      html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i);
+
+    // 抓作者（og:title 通常是 "姓名 (@帳號) • Instagram"）
+    const titleMatch =
+      html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i) ||
+      html.match(/<meta\s+content="([^"]+)"\s+property="og:title"/i);
+
+    const content = descMatch ? decodeHtmlEntities(descMatch[1]) : null;
+
+    // 從 title 抓 @username
+    let username = '';
+    if (titleMatch) {
+      const usernameMatch = titleMatch[1].match(/@([\w.]+)/);
+      if (usernameMatch) username = usernameMatch[1];
+    }
+
+    return { content, username };
+  } catch (err) {
+    console.error('Fetch Instagram error:', err.message);
+    return { content: null, username: '' };
+  }
+}
+
 // ── Threads 內容抓取 ──────────────────────────────────────
 
 async function fetchThreadsContent(cleanUrl) {
@@ -140,6 +192,47 @@ async function handleMessage(event) {
     }
     return;
   }
+
+  // ── IG 收藏流程 ──
+if (isInstagramUrl(text)) {
+  const parsed = parseInstagramUrl(text);
+  if (!parsed) {
+    return replyText(event.replyToken, '❌ 無法解析 IG 連結，請確認格式是否正確。');
+  }
+  await replyText(event.replyToken, '⏳ 讀取中，請稍候...');
+  try {
+    const { content, username } = await fetchInstagramContent(parsed.cleanUrl);
+    if (!content) {
+      return pushText(userId, '⚠️ 無法讀取 IG 內容，可能是私人帳號或需要登入。\n\n連結已記錄：' + parsed.cleanUrl);
+    }
+    const userCats = await getCategories(userId);
+    const aiResult = await classifyContent(content, username, userCats);
+    const saved = await saveArticle(userId, {
+      title: aiResult.title,
+      url: parsed.cleanUrl,
+      username: username,
+      content,
+      summary: aiResult.summary,
+      category: aiResult.category,
+    });
+    if (saved.success) {
+      const msg =
+        `✅ IG 貼文已儲存！\n\n` +
+        `📂 分類：${aiResult.category}\n` +
+        `📌 標題：${aiResult.title}\n` +
+        `📝 摘要：${aiResult.summary}\n` +
+        `👤 作者：@${username}\n` +
+        `🔗 ${parsed.cleanUrl}`;
+      await pushText(userId, msg);
+    } else {
+      await pushText(userId, `⚠️ AI 分類完成，但儲存失敗。\n錯誤：${saved.error}`);
+    }
+  } catch (err) {
+    console.error('IG 收藏流程錯誤:', err);
+    await pushText(userId, `❌ 處理時發生錯誤：${err.message}`);
+  }
+  return;
+}
 
   // ── 近 10 筆 ──
   if (text === '/近10筆') {
