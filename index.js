@@ -39,7 +39,7 @@ function isThreadsUrl(text) {
 }
 
 function parseThreadsUrl(text) {
-  const urlMatch = text.match(/https:\/\/www\.threads\.com\/@([\w.]+)\/post\/([\w]+)/);
+  const urlMatch = text.match(/https:\/\/www\.threads\.com\/@([\w.]+)\/post\/([\w-]+)/);
   if (!urlMatch) return null;
   return {
     cleanUrl: `https://www.threads.com/@${urlMatch[1]}/post/${urlMatch[2]}`,
