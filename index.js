@@ -562,7 +562,7 @@ app.get('/me', async (req, res) => {
 
   <!-- 最新10筆橫向卡片 -->
   <div class="section" style="padding-top:20px;">
-    <div class="section-title">📋 最新收藏</div>
+    <div class="section-title">📋 最新 10 筆收藏</div>
     ${articles.length === 0 ? `
       <div class="empty">
         <strong>尚無收藏文章</strong>
