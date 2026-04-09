@@ -262,6 +262,7 @@ if (text === '說明' || text === '/help') {
     `/刪除分類 名稱　刪除分類\n\n` +
     `💡 小提示\n` +
     `在網頁收藏頁可以直接修改分類、\n` +
+    `新增好的分類也會自動幫你整理存檔唷！、\n` +
     `刪除文章，更方便整理！`;
   return replyText(event.replyToken, help);
 }
