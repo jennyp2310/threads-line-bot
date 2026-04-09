@@ -394,29 +394,25 @@ app.get('/me', async (req, res) => {
     `<option value="${c}" ${category === c ? 'selected' : ''}>${c}</option>`
   ).join('');
 
-  const featuredCard = articles[0] ? `
-    <div class="featured" id="card-${articles[0].id}">
-      <div class="featured-label">最新收藏</div>
-      <div class="featured-title">${articles[0].title || '無標題'}</div>
-      <div class="featured-summary">${articles[0].summary || ''}</div>
-      <div class="featured-footer">
-        <div class="featured-meta">
-          <span class="cat-tag">${articles[0].category || ''}</span>
-          <span class="meta-text">👤 ${articles[0].username || ''}　📅 ${articles[0].saved_at ? articles[0].saved_at.slice(0,10) : ''}</span>
-        </div>
-        <a class="read-link" href="${articles[0].url}" target="_blank">閱讀全文 →</a>
-      </div>
-      <div class="card-actions" style="margin-top:12px;">
-        <select class="cat-select" onchange="updateCat('${articles[0].id}', this)">
-          ${categories.map(c => `<option value="${c}" ${articles[0].category === c ? 'selected' : ''}>${c}</option>`).join('')}
+  // 首頁：最新 10 筆橫向卡片
+  const recentCards = articles.slice(0, 10).map(a => `
+    <div class="h-card" id="card-${a.id}">
+      <div class="h-card-cat">${a.category || ''}</div>
+      <div class="h-card-title">${a.title || '無標題'}</div>
+      <div class="h-card-summary">${a.summary || ''}</div>
+      <div class="h-card-meta">👤 ${a.username || ''}　${a.saved_at ? a.saved_at.slice(0,10) : ''}</div>
+      <div class="h-card-actions">
+        <select class="cat-select" onchange="updateCat('${a.id}', this)">
+          ${categories.map(c => `<option value="${c}" ${a.category === c ? 'selected' : ''}>${c}</option>`).join('')}
         </select>
-        <button class="delete-btn" onclick="deleteArticleById('${articles[0].id}')">刪除</button>
+        <button class="delete-btn" onclick="deleteArticleById('${a.id}')">刪除</button>
       </div>
+      <a class="h-card-link" href="${a.url}" target="_blank">閱讀全文 →</a>
     </div>
-    <div class="divider"></div>
-  ` : '';
+  `).join('');
 
-  const restCards = articles.slice(1).map(a => `
+  // 搜尋結果：格線卡片
+  const gridCards = articles.map(a => `
     <div class="card" id="card-${a.id}">
       <div class="card-cat">${a.category || ''}</div>
       <div class="card-title">${a.title || '無標題'}</div>
@@ -434,6 +430,8 @@ app.get('/me', async (req, res) => {
     </div>
   `).join('');
 
+  const isFiltered = category || keyword;
+
   res.send(`<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -445,10 +443,14 @@ app.get('/me', async (req, res) => {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'DM Sans', -apple-system, sans-serif; background: #FAFAF7; color: #1a1a18; }
+
+    /* Header */
     .header { border-bottom: 3px solid #1a1a18; padding: 20px 20px 14px; display: flex; align-items: flex-end; justify-content: space-between; max-width: 720px; margin: 0 auto; }
-    .logo { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; letter-spacing: -1px; line-height: 1; }
+    .logo { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; letter-spacing: -1px; line-height: 1; text-decoration: none; color: #1a1a18; }
     .logo span { color: #C8522A; }
     .header-meta { font-size: 11px; color: #888; letter-spacing: 2px; text-transform: uppercase; text-align: right; line-height: 1.6; }
+
+    /* Search */
     .search-wrap { background: #FAFAF7; border-bottom: 0.5px solid #ccc; padding: 12px 20px; }
     .search-inner { max-width: 720px; margin: 0 auto; }
     .search-form { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -457,29 +459,55 @@ app.get('/me', async (req, res) => {
     .search-form select { padding: 7px 12px; border: 0.5px solid #bbb; background: #fff; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; }
     .search-form button { background: #1a1a18; color: #FAFAF7; border: none; padding: 7px 18px; font-family: 'DM Sans', sans-serif; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
     .search-form button:hover { background: #C8522A; }
-    .container { max-width: 720px; margin: 0 auto; padding: 24px 20px; }
-    .featured { padding: 20px 0; }
-    .featured-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: #C8522A; margin-bottom: 10px; }
-    .featured-title { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; line-height: 1.3; margin-bottom: 12px; }
-    .featured-summary { font-size: 14px; color: #444; line-height: 1.7; margin-bottom: 14px; }
-    .featured-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-    .featured-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .cat-tag { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; background: #1a1a18; color: #FAFAF7; padding: 3px 8px; }
-    .meta-text { font-size: 11px; color: #888; }
-    .read-link { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #1a1a18; text-decoration: none; font-weight: 500; border-bottom: 1px solid #1a1a18; padding-bottom: 1px; white-space: nowrap; }
-    .read-link:hover { color: #C8522A; border-color: #C8522A; }
-    .divider { height: 1px; background: #1a1a18; margin: 4px 0 20px; }
+
+    /* Section */
+    .section { max-width: 720px; margin: 0 auto; padding: 20px 20px 0; }
+    .section-title { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .section-title::after { content: ''; flex: 1; height: 0.5px; background: #ddd; }
+
+    /* 分類橫向滑動 */
+    .cat-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+    .cat-scroll::-webkit-scrollbar { display: none; }
+    .cat-pill { flex-shrink: 0; padding: 5px 14px; border: 0.5px solid #ccc; background: #fff; font-size: 12px; cursor: pointer; text-decoration: none; color: #1a1a18; white-space: nowrap; transition: all 0.15s; }
+    .cat-pill:hover, .cat-pill.active { background: #1a1a18; color: #FAFAF7; border-color: #1a1a18; }
+
+    /* 橫向卡片滑動 */
+    .h-scroll { display: flex; gap: 12px; overflow-x: auto; padding: 4px 0 16px; scrollbar-width: none; }
+    .h-scroll::-webkit-scrollbar { display: none; }
+    .h-card { flex-shrink: 0; width: 240px; background: #fff; border: 0.5px solid #ddd; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+    .h-card-cat { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #C8522A; }
+    .h-card-title { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 700; line-height: 1.4; }
+    .h-card-summary { font-size: 11px; color: #555; line-height: 1.5; flex: 1; }
+    .h-card-meta { font-size: 10px; color: #aaa; }
+    .h-card-actions { display: flex; gap: 6px; margin-top: 4px; }
+    .h-card-actions .cat-select { flex: 1; font-size: 11px; }
+    .h-card-link { display: inline-block; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: #1a1a18; text-decoration: none; border-bottom: 1px solid #1a1a18; padding-bottom: 1px; margin-top: 4px; align-self: flex-start; }
+    .h-card-link:hover { color: #C8522A; border-color: #C8522A; }
+
+    /* 搜尋結果格線 */
+    .container { max-width: 720px; margin: 0 auto; padding: 16px 20px; }
+    .result-label { font-size: 11px; color: #888; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #ccc; }
     @media (max-width: 500px) { .grid { grid-template-columns: 1fr; } }
     .card { background: #FAFAF7; padding: 18px; }
     .card-cat { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #C8522A; margin-bottom: 8px; }
-    .card-title { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; line-height: 1.4; margin-bottom: 8px; }
+    .card-title { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; line-height: 1.4; margin-bottom: 8px; }
     .card-summary { font-size: 12px; color: #555; line-height: 1.6; margin-bottom: 12px; }
     .card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 0.5px solid #ddd; padding-top: 10px; gap: 8px; flex-wrap: wrap; }
+    .meta-text { font-size: 11px; color: #aaa; }
     .read-link-sm { font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: #1a1a18; text-decoration: none; font-weight: 500; border-bottom: 1px solid #1a1a18; padding-bottom: 1px; white-space: nowrap; }
     .read-link-sm:hover { color: #C8522A; border-color: #C8522A; }
-    .empty { text-align: center; padding: 60px 20px; color: #aaa; font-size: 14px; line-height: 2; }
-    .empty strong { display: block; font-family: 'Playfair Display', serif; font-size: 20px; color: #bbb; margin-bottom: 8px; }
+    .card-actions { display: flex; gap: 8px; margin-top: 10px; border-top: 0.5px solid #eee; padding-top: 10px; }
+    .card-actions .cat-select { flex: 1; }
+
+    /* 共用 */
+    .cat-select { padding: 5px 8px; border: 0.5px solid #bbb; background: #fff; font-family: 'DM Sans', sans-serif; font-size: 11px; outline: none; cursor: pointer; }
+    .cat-select:focus { border-color: #1a1a18; }
+    .delete-btn { background: none; border: 0.5px solid #ccc; padding: 5px 10px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: #aaa; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
+    .delete-btn:hover { background: #C8522A; color: #fff; border-color: #C8522A; }
+    .divider { height: 1px; background: #eee; margin: 0 20px; }
+
+    /* 分類管理 */
     .cat-manage { background: #f0ede8; padding: 24px 20px 40px; margin-top: 32px; }
     .cat-manage-inner { max-width: 720px; margin: 0 auto; }
     .cat-manage-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; margin-bottom: 16px; }
@@ -496,19 +524,17 @@ app.get('/me', async (req, res) => {
     .cat-add button:hover { background: #C8522A; }
     .cat-msg { font-size: 12px; min-height: 18px; margin-top: 4px; }
     .cat-hint { font-size: 11px; color: #aaa; margin-bottom: 12px; }
-    .card-actions { display: flex; gap: 8px; margin-top: 10px; border-top: 0.5px solid #eee; padding-top: 10px; }
-    .card-actions .cat-select { flex: 1; }
-    .cat-select { width: 100%; padding: 6px 10px; border: 0.5px solid #bbb; background: #fff; font-family: 'DM Sans', sans-serif; font-size: 12px; outline: none; cursor: pointer; }
-    .cat-select:focus { border-color: #1a1a18; }
-    .delete-btn { background: none; border: 0.5px solid #ccc; padding: 6px 12px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: #aaa; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
-    .delete-btn:hover { background: #C8522A; color: #fff; border-color: #C8522A; }
+    .empty { text-align: center; padding: 60px 20px; color: #aaa; font-size: 14px; line-height: 2; }
+    .empty strong { display: block; font-family: 'Playfair Display', serif; font-size: 20px; color: #bbb; margin-bottom: 8px; }
   </style>
 </head>
 <body>
+
   <div class="header">
-    <div class="logo">THREAD<span>S</span></div>
+    <a class="logo" href="/me?token=${token}">THREAD<span>S</span></a>
     <div class="header-meta">我的收藏<br>共 ${articles.length} 篇文章</div>
   </div>
+
   <div class="search-wrap">
     <div class="search-inner">
       <form class="search-form" method="get" action="/me">
@@ -522,18 +548,50 @@ app.get('/me', async (req, res) => {
       </form>
     </div>
   </div>
-  <div class="container">
+
+  ${!isFiltered ? `
+  <!-- 分類橫向滑動 -->
+  <div class="section" style="padding-top:24px;">
+    <div class="section-title">📂 分類</div>
+    <div class="cat-scroll">
+      ${categories.map(c => `
+        <a class="cat-pill" href="/me?token=${token}&category=${encodeURIComponent(c)}">${c}</a>
+      `).join('')}
+    </div>
+  </div>
+
+  <!-- 最新10筆橫向卡片 -->
+  <div class="section" style="padding-top:20px;">
+    <div class="section-title">📋 最新收藏</div>
     ${articles.length === 0 ? `
       <div class="empty">
         <strong>尚無收藏文章</strong>
         回到 LINE 貼上 Threads 連結開始收藏！
       </div>
     ` : `
-      ${featuredCard}
-      <div class="grid">${restCards}</div>
+      <div class="h-scroll">${recentCards}</div>
     `}
   </div>
-  <div class="cat-manage">
+  ` : `
+  <!-- 搜尋 / 分類結果 -->
+  <div class="container">
+    <div class="result-label">
+      ${category ? `📂 ${category}` : keyword ? `🔍 "${keyword}"` : ''} — 共 ${articles.length} 篇
+      　<a href="/me?token=${token}" style="font-size:11px;color:#C8522A;text-decoration:none;">← 回首頁</a>
+    </div>
+    ${articles.length === 0 ? `
+      <div class="empty">
+        <strong>找不到文章</strong>
+        試試其他關鍵字或分類
+      </div>
+    ` : `
+      <div class="grid">${gridCards}</div>
+    `}
+  </div>
+  `}
+
+  <!-- 分類管理 -->
+  <div class="cat-manage" style="margin-top:24px;">
     <div class="cat-manage-inner">
       <div class="cat-manage-title">📋 分類管理</div>
       <div class="cat-hint">點分類名稱可改名，點 ✕ 可刪除</div>
@@ -545,6 +603,7 @@ app.get('/me', async (req, res) => {
       <div class="cat-msg" id="catMsg"></div>
     </div>
   </div>
+
   <script>
     const TOKEN = '${token}';
     let cats = ${JSON.stringify(categories)};
