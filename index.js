@@ -172,6 +172,7 @@ async function fetchFacebookContent(cleanUrl) {
         'Accept-Language': 'zh-TW,zh;q=0.9',
       },
     });
+    
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
 
@@ -196,6 +197,57 @@ async function fetchFacebookContent(cleanUrl) {
   } catch (err) {
     console.error('Fetch Facebook error:', err.message);
     return { content: null, username: '' };
+  }
+}
+
+// ── 小紅書 URL 工具函式 ───────────────────────────────────
+
+function isXhsUrl(text) {
+  return text.includes('xhslink.com') || text.includes('xiaohongshu.com');
+}
+
+function extractXhsUrl(text) {
+  // 從混合文字中抓出網址
+  const match = text.match(/https?:\/\/(xhslink\.com\/[^\s]+|www\.xiaohongshu\.com\/[^\s]+)/);
+  if (!match) return null;
+  return match[0];
+}
+
+async function fetchXhsContent(url) {
+  try {
+    // 追蹤短網址重新導向
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+        'Accept-Language': 'zh-TW,zh;q=0.9',
+      },
+      redirect: 'follow',
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+    const finalUrl = res.url; // 取得最終導向的網址
+
+    const descMatch =
+      html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i) ||
+      html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i);
+
+    const titleMatch =
+      html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i) ||
+      html.match(/<meta\s+content="([^"]+)"\s+property="og:title"/i);
+
+    const content = descMatch ? decodeHtmlEntities(descMatch[1]) : null;
+
+    let username = '';
+    if (titleMatch) {
+      const raw = decodeHtmlEntities(titleMatch[1]);
+      username = raw.replace(/\s*[-|]\s*小红书.*$/i, '').trim();
+    }
+
+    return { content, username, finalUrl };
+  } catch (err) {
+    console.error('Fetch XHS error:', err.message);
+    return { content: null, username: '', finalUrl: url };
   }
 }
 
@@ -335,6 +387,49 @@ if (isFacebookUrl(text)) {
     }
   } catch (err) {
     console.error('FB 收藏流程錯誤:', err);
+    await pushText(userId, `❌ 處理時發生錯誤：${err.message}`);
+  }
+  return;
+}
+
+// ── 小紅書收藏流程 ──
+if (isXhsUrl(text)) {
+  const rawUrl = extractXhsUrl(text);
+  if (!rawUrl) {
+    return replyText(event.replyToken, '❌ 無法解析小紅書連結，請確認格式是否正確。');
+  }
+  await replyText(event.replyToken, '⏳ 讀取中，請稍候...');
+  try {
+    const { content, username, finalUrl } = await fetchXhsContent(rawUrl);
+    const cleanUrl = finalUrl || rawUrl;
+
+    if (!content) {
+      return pushText(userId, '⚠️ 無法讀取小紅書內容，可能需要登入才能查看。\n\n連結已記錄：' + cleanUrl);
+    }
+    const userCats = await getCategories(userId);
+    const aiResult = await classifyContent(content, username, userCats);
+    const saved = await saveArticle(userId, {
+      title: aiResult.title,
+      url: cleanUrl,
+      username: username,
+      content,
+      summary: aiResult.summary,
+      category: aiResult.category,
+    });
+    if (saved.success) {
+      const msg =
+        `✅ 小紅書貼文已儲存！\n\n` +
+        `📂 分類：${aiResult.category}\n` +
+        `📌 標題：${aiResult.title}\n` +
+        `📝 摘要：${aiResult.summary}\n` +
+        `👤 作者：${username}\n` +
+        `🔗 ${cleanUrl}`;
+      await pushText(userId, msg);
+    } else {
+      await pushText(userId, `⚠️ AI 分類完成，但儲存失敗。\n錯誤：${saved.error}`);
+    }
+  } catch (err) {
+    console.error('小紅書收藏流程錯誤:', err);
     await pushText(userId, `❌ 處理時發生錯誤：${err.message}`);
   }
   return;
