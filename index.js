@@ -233,16 +233,25 @@ async function fetchXhsContent(url) {
       const location = res.headers.get('location');
       finalUrl = location || url;
       console.log('XHS redirect to:', finalUrl);
+
+      // 先嘗試讀 302 回應本身的 body（短網址頁面可能有 og meta）
       try {
-        const res2 = await fetch(finalUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-          },
-        });
-        if (res2.ok) html = await res2.text();
-      } catch (e) {
-        console.log('XHS redirect fetch failed:', e.message);
+        html = await res.text();
+      } catch (e) {}
+
+      // 若 302 body 沒有 og meta，再嘗試抓重新導向目標
+      if (!html || !html.includes('og:title')) {
+        try {
+          const res2 = await fetch(finalUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+              'Accept-Language': 'zh-CN,zh;q=0.9',
+            },
+          });
+          if (res2.ok) html = await res2.text();
+        } catch (e) {
+          console.log('XHS redirect fetch failed:', e.message);
+        }
       }
     } else if (res.ok) {
       html = await res.text();
