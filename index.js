@@ -225,7 +225,7 @@ async function fetchXhsContent(url) {
     try {
       const res = await fetch(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
           'Accept-Language': 'zh-CN,zh;q=0.9',
         },
         redirect: 'follow',
@@ -243,7 +243,7 @@ async function fetchXhsContent(url) {
       try {
         const res2 = await fetch(url, {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+            'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
             'Accept-Language': 'zh-CN,zh;q=0.9',
           },
           redirect: 'manual',
