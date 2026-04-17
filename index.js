@@ -218,44 +218,45 @@ function extractXhsUrl(text) {
 
 async function fetchXhsContent(url) {
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
-        'Accept-Language': 'zh-TW,zh;q=0.9',
-      },
-      redirect: 'manual',
-    });
-
+    // 先嘗試直接跟隨重新導向（Googlebot UA）
     let html = '';
     let finalUrl = url;
 
-    if (res.status >= 300 && res.status < 400) {
-      const location = res.headers.get('location');
-      finalUrl = location || url;
-      console.log('XHS redirect to:', finalUrl);
-
-      // 先嘗試讀 302 回應本身的 body（短網址頁面可能有 og meta）
-      try {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+        },
+        redirect: 'follow',
+      });
+      if (res.ok) {
         html = await res.text();
-      } catch (e) {}
-
-      // 若 302 body 沒有 og meta，再嘗試抓重新導向目標
-      if (!html || !html.includes('og:title')) {
-        try {
-          const res2 = await fetch(finalUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
-              'Accept-Language': 'zh-CN,zh;q=0.9',
-            },
-          });
-          if (res2.ok) html = await res2.text();
-        } catch (e) {
-          console.log('XHS redirect fetch failed:', e.message);
-        }
+        finalUrl = res.url;
       }
-    } else if (res.ok) {
-      html = await res.text();
-      finalUrl = res.url;
+    } catch (e) {
+      console.log('XHS follow fetch failed:', e.message);
+    }
+
+    // 若跟隨失敗，改用 manual 讀 302 body
+    if (!html || !html.includes('og:title')) {
+      try {
+        const res2 = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+          },
+          redirect: 'manual',
+        });
+        const body = await res2.text();
+        if (body && body.includes('og:title')) {
+          html = body;
+        }
+        const location = res2.headers.get('location');
+        if (location) finalUrl = location;
+      } catch (e) {
+        console.log('XHS manual fetch failed:', e.message);
+      }
     }
 
     if (!html) return { content: null, username: '', finalUrl, ogTitle: '' };
