@@ -218,46 +218,23 @@ function extractXhsUrl(text) {
 
 async function fetchXhsContent(url) {
   try {
-    // 先嘗試直接跟隨重新導向（Googlebot UA）
     let html = '';
     let finalUrl = url;
 
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
-          'Accept-Language': 'zh-CN,zh;q=0.9',
-        },
-        redirect: 'follow',
-      });
-      if (res.ok) {
-        html = await res.text();
-        finalUrl = res.url;
-      }
-    } catch (e) {
-      console.log('XHS follow fetch failed:', e.message);
-    }
+    // 只讀短網址頁面本身，不追蹤重新導向
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+      },
+      redirect: 'manual',
+    });
 
-    // 若跟隨失敗，改用 manual 讀 302 body
-    if (!html || !html.includes('og:title')) {
-      try {
-        const res2 = await fetch(url, {
-          headers: {
-            'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-          },
-          redirect: 'manual',
-        });
-        const body = await res2.text();
-        if (body && body.includes('og:title')) {
-          html = body;
-        }
-        const location = res2.headers.get('location');
-        if (location) finalUrl = location;
-      } catch (e) {
-        console.log('XHS manual fetch failed:', e.message);
-      }
-    }
+    html = await res.text();
+
+    // 記錄重新導向目標作為 finalUrl（存檔用）
+    const location = res.headers.get('location');
+    if (location) finalUrl = location;
 
     if (!html) return { content: null, username: '', finalUrl, ogTitle: '' };
 
