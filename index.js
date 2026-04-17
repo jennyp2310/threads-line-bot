@@ -136,6 +136,70 @@ function decodeHtmlEntities(str) {
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
+// ── FB URL 工具函式 ───────────────────────────────────────
+
+function isFacebookUrl(text) {
+  return text.includes('facebook.com/share/p/') || 
+         text.includes('facebook.com/permalink') ||
+         text.includes('facebook.com/photo') ||
+         (text.includes('facebook.com') && text.includes('/posts/'));
+}
+
+function parseFacebookUrl(text) {
+  // 支援 share/p/ 格式
+  const shareMatch = text.match(/https:\/\/www\.facebook\.com\/share\/p\/([\w]+)/);
+  if (shareMatch) {
+    return {
+      cleanUrl: `https://www.facebook.com/share/p/${shareMatch[1]}/`,
+      postId: shareMatch[1],
+    };
+  }
+  // 支援 /posts/ 格式
+  const postMatch = text.match(/https:\/\/www\.facebook\.com\/[^/]+\/posts\/([\w]+)/);
+  if (postMatch) {
+    return {
+      cleanUrl: text.split('?')[0],
+      postId: postMatch[1],
+    };
+  }
+  return null;
+}
+
+async function fetchFacebookContent(cleanUrl) {
+  try {
+    const res = await fetch(cleanUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+        'Accept-Language': 'zh-TW,zh;q=0.9',
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+
+    const descMatch =
+      html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i) ||
+      html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i);
+
+    const titleMatch =
+      html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i) ||
+      html.match(/<meta\s+content="([^"]+)"\s+property="og:title"/i);
+
+    const content = descMatch ? decodeHtmlEntities(descMatch[1]) : null;
+
+    // FB 的 og:title 通常是「名稱 - Facebook」或直接是名字
+    let username = '';
+    if (titleMatch) {
+      const raw = decodeHtmlEntities(titleMatch[1]);
+      username = raw.replace(/\s*[-|]\s*Facebook.*$/i, '').trim();
+    }
+
+    return { content, username };
+  } catch (err) {
+    console.error('Fetch Facebook error:', err.message);
+    return { content: null, username: '' };
+  }
+}
+
 // ── Webhook 主入口 ────────────────────────────────────────
 
 app.post('/webhook', line.middleware(config), async (req, res) => {
@@ -247,6 +311,47 @@ if (isInstagramUrl(text)) {
   return;
 }
 
+// ── FB 收藏流程 ──
+if (isFacebookUrl(text)) {
+  const parsed = parseFacebookUrl(text);
+  if (!parsed) {
+    return replyText(event.replyToken, '❌ 無法解析 FB 連結，請確認格式是否正確。');
+  }
+  await replyText(event.replyToken, '⏳ 讀取中，請稍候...');
+  try {
+    const { content, username } = await fetchFacebookContent(parsed.cleanUrl);
+    if (!content) {
+      return pushText(userId, '⚠️ 無法讀取 FB 內容，可能是私人貼文或需要登入。\n\n連結已記錄：' + parsed.cleanUrl);
+    }
+    const userCats = await getCategories(userId);
+    const aiResult = await classifyContent(content, username, userCats);
+    const saved = await saveArticle(userId, {
+      title: aiResult.title,
+      url: parsed.cleanUrl,
+      username: username,
+      content,
+      summary: aiResult.summary,
+      category: aiResult.category,
+    });
+    if (saved.success) {
+      const msg =
+        `✅ FB 貼文已儲存！\n\n` +
+        `📂 分類：${aiResult.category}\n` +
+        `📌 標題：${aiResult.title}\n` +
+        `📝 摘要：${aiResult.summary}\n` +
+        `👤 作者：${username}\n` +
+        `🔗 ${parsed.cleanUrl}`;
+      await pushText(userId, msg);
+    } else {
+      await pushText(userId, `⚠️ AI 分類完成，但儲存失敗。\n錯誤：${saved.error}`);
+    }
+  } catch (err) {
+    console.error('FB 收藏流程錯誤:', err);
+    await pushText(userId, `❌ 處理時發生錯誤：${err.message}`);
+  }
+  return;
+}
+  
   // ── 近 10 筆 ──
   if (text === '/近10筆') {
     await replyText(event.replyToken, '📋 讀取最新 10 筆...');
