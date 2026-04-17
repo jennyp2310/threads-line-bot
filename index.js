@@ -32,6 +32,9 @@ const client = new line.messagingApi.MessagingApiClient({
 
 const app = express();
 
+// ── 暫存等待分類的文章 ────────────────────────────────────
+const pendingArticles = new Map(); // userId → { url, title, content, username }
+
 // ── URL 工具函式 ──────────────────────────────────────────
 
 function isThreadsUrl(text) {
@@ -403,36 +406,93 @@ if (isXhsUrl(text)) {
     const { content, username, finalUrl } = await fetchXhsContent(rawUrl);
     const cleanUrl = finalUrl || rawUrl;
 
-    if (!content) {
-      return pushText(userId, '⚠️ 無法讀取小紅書內容，可能需要登入才能查看。\n\n連結已記錄：' + cleanUrl);
-    }
-    const userCats = await getCategories(userId);
-    const aiResult = await classifyContent(content, username, userCats);
-    const saved = await saveArticle(userId, {
-      title: aiResult.title,
-      url: cleanUrl,
-      username: username,
-      content,
-      summary: aiResult.summary,
-      category: aiResult.category,
-    });
-    if (saved.success) {
-      const msg =
-        `✅ 小紅書貼文已儲存！\n\n` +
-        `📂 分類：${aiResult.category}\n` +
-        `📌 標題：${aiResult.title}\n` +
-        `📝 摘要：${aiResult.summary}\n` +
-        `👤 作者：${username}\n` +
-        `🔗 ${cleanUrl}`;
-      await pushText(userId, msg);
+    if (content) {
+      // 有內容 → AI 自動分類存檔
+      const userCats = await getCategories(userId);
+      const aiResult = await classifyContent(content, username, userCats);
+      const saved = await saveArticle(userId, {
+        title: aiResult.title,
+        url: cleanUrl,
+        username: username,
+        content,
+        summary: aiResult.summary,
+        category: aiResult.category,
+      });
+      if (saved.success) {
+        const msg =
+          `✅ 小紅書貼文已儲存！\n\n` +
+          `📂 分類：${aiResult.category}\n` +
+          `📌 標題：${aiResult.title}\n` +
+          `📝 摘要：${aiResult.summary}\n` +
+          `👤 作者：${username}\n` +
+          `🔗 ${cleanUrl}`;
+        await pushText(userId, msg);
+      } else {
+        await pushText(userId, `⚠️ 儲存失敗。\n錯誤：${saved.error}`);
+      }
     } else {
-      await pushText(userId, `⚠️ AI 分類完成，但儲存失敗。\n錯誤：${saved.error}`);
+      // 無法抓取內容 → 暫存，讓用戶選分類
+      const titleFromText = text.replace(rawUrl, '').replace('Copy and open rednote to view the note', '').trim().slice(0, 30) || '小紅書貼文';
+      pendingArticles.set(userId, {
+        url: cleanUrl,
+        title: titleFromText,
+        content: titleFromText,
+        username: '',
+        summary: titleFromText,
+      });
+
+      const cats = await getCategories(userId);
+      return client.replyMessage({
+        replyToken: event.replyToken,
+        messages: [{
+          type: 'text',
+          text: `📌 連結已讀取！\n小紅書內容無法自動讀取，請選擇分類後儲存：\n\n${cleanUrl}`,
+          quickReply: {
+            items: cats.slice(0, 13).map(cat => ({
+              type: 'action',
+              action: { type: 'message', label: cat, text: `/xhs分類 ${cat}` },
+            })),
+          },
+        }],
+      });
     }
   } catch (err) {
     console.error('小紅書收藏流程錯誤:', err);
     await pushText(userId, `❌ 處理時發生錯誤：${err.message}`);
   }
   return;
+}
+
+// ── 小紅書手動選分類 ──
+if (text.startsWith('/xhs分類')) {
+  const category = text.replace('/xhs分類', '').trim();
+  const pending = pendingArticles.get(userId);
+
+  if (!pending) {
+    return replyText(event.replyToken, '❌ 找不到待儲存的貼文，請重新貼上連結。');
+  }
+
+  const saved = await saveArticle(userId, {
+    title: pending.title,
+    url: pending.url,
+    username: pending.username,
+    content: pending.content,
+    summary: pending.summary,
+    category: category,
+  });
+
+  pendingArticles.delete(userId);
+
+  if (saved.success) {
+    return pushText(userId,
+      `✅ 小紅書貼文已儲存！\n\n` +
+      `📂 分類：${category}\n` +
+      `📌 標題：${pending.title}\n` +
+      `🔗 ${pending.url}`
+    );
+  } else {
+    return pushText(userId, `⚠️ 儲存失敗。\n錯誤：${saved.error}`);
+  }
 }
   
   // ── 近 10 筆 ──
