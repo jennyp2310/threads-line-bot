@@ -227,9 +227,17 @@ async function fetchXhsContent(url) {
       redirect: 'manual',
     });
 
+   // 處理重新導向
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location');
+      console.log('XHS redirect to:', location);
+      // 重新導向時直接回傳空內容，讓用戶手動選分類
+      return { content: null, username: '', finalUrl: location || url };
+    }
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
-    const finalUrl = res.url; // 取得最終導向的網址
+    const finalUrl = res.url;
 
     const descMatch =
       html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i) ||
@@ -432,14 +440,25 @@ if (isXhsUrl(text)) {
       }
     } else {
       // 無法抓取內容 → 暫存，讓用戶選分類
-      const titleFromText = text.replace(rawUrl, '').replace('Copy and open rednote to view the note', '').trim().slice(0, 30) || '小紅書貼文';
-      pendingArticles.set(userId, {
-        url: cleanUrl,
-        title: titleFromText,
-        content: titleFromText,
-        username: '',
-        summary: titleFromText,
-      });
+      const titleFromText = text
+  .replace(rawUrl, '')
+  .replace(/Copy and open rednote to view the note/gi, '')
+  .replace(/http\S+/g, '')  // 移除其他網址
+  .trim()
+  .slice(0, 50) || '小紅書貼文';
+
+// 取第一段當標題，全文當摘要
+const lines = titleFromText.split(/[\n|]/).map(l => l.trim()).filter(Boolean);
+const title = lines[0]?.slice(0, 20) || titleFromText.slice(0, 20);
+const summary = titleFromText;
+
+pendingArticles.set(userId, {
+  url: cleanUrl,
+  title,
+  content: titleFromText,
+  username: '',
+  summary,
+});
 
       const cats = await getCategories(userId);
       return client.replyMessage({
