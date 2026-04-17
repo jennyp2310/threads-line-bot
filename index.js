@@ -429,20 +429,21 @@ if (isXhsUrl(text)) {
   }
   await replyText(event.replyToken, '⏳ 讀取中，請稍候...');
   try {
-    const { content, username, finalUrl, ogTitle } = await fetchXhsContent(rawUrl);
-    const cleanUrl = finalUrl || rawUrl;
-
+    // 先從用戶傳的文字提取內容（不依賴網路抓取）
     const textPart = text
       .replace(rawUrl, '')
       .replace(/Copy and open rednote to view the note/gi, '')
       .replace(/http\S+/g, '')
       .trim();
 
+    // 再嘗試抓網頁（可能成功也可能失敗）
+    const { content, username, finalUrl, ogTitle } = await fetchXhsContent(rawUrl);
+    const cleanUrl = finalUrl || rawUrl;
+
     const bestContent = content || ogTitle || textPart || null;
-    const bestTitle = ogTitle || textPart.slice(0, 20) || '小紅書貼文';
+    const bestTitle = ogTitle || textPart.slice(0, 30) || '小紅書貼文';
 
     if (bestContent) {
-      // 有任何文字 → AI 自動分類存檔
       const userCats = await getCategories(userId);
       const aiResult = await classifyContent(bestContent, username, userCats);
       const saved = await saveArticle(userId, {
@@ -465,7 +466,7 @@ if (isXhsUrl(text)) {
         await pushText(userId, `⚠️ 儲存失敗。\n錯誤：${saved.error}`);
       }
     } else {
-      // 完全沒有文字 → 讓用戶手動選分類
+      // 完全沒有任何文字
       pendingArticles.set(userId, {
         url: cleanUrl,
         title: '小紅書貼文',
@@ -473,7 +474,6 @@ if (isXhsUrl(text)) {
         username: '',
         summary: '小紅書貼文',
       });
-
       const cats = await getCategories(userId);
       return client.pushMessage({
         to: userId,
