@@ -461,8 +461,8 @@ pendingArticles.set(userId, {
 });
 
       const cats = await getCategories(userId);
-      return client.replyMessage({
-        replyToken: event.replyToken,
+      return client.pushMessage({
+        to: userId,
         messages: [{
           type: 'text',
           text: `📌 連結已讀取！\n小紅書內容無法自動讀取，請選擇分類後儲存：\n\n${cleanUrl}`,
