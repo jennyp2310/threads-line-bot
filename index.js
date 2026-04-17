@@ -18,7 +18,6 @@ const {
   renameCategoryById,
   updateArticleCategory,
   deleteArticle,
-  saveToNotion,
 } = require('./db');
 const { createRichMenu } = require('./setup-richmenu');
 
@@ -239,12 +238,6 @@ async function handleMessage(event) {
         summary: aiResult.summary,
         category: aiResult.category,
       });
-      await saveToNotion({
-  title: aiResult.title,
-  url: parsed.cleanUrl,
-  content,
-  summary: aiResult.summary,
-});
       if (saved.success) {
         const msg =
           `✅ 已儲存！\n\n` +
@@ -286,12 +279,7 @@ if (isInstagramUrl(text)) {
       summary: aiResult.summary,
       category: aiResult.category,
     });
-    await saveToNotion({
-  title: aiResult.title,
-  url: parsed.cleanUrl,
-  content,
-  summary: aiResult.summary,
-});
+    
     if (saved.success) {
       const msg =
         `✅ IG 貼文已儲存！\n\n` +
