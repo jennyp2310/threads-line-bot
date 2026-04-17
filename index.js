@@ -218,26 +218,38 @@ function extractXhsUrl(text) {
 
 async function fetchXhsContent(url) {
   try {
-    // 追蹤短網址重新導向
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
         'Accept-Language': 'zh-TW,zh;q=0.9',
       },
       redirect: 'manual',
     });
 
-   // 處理重新導向
+    let html = '';
+    let finalUrl = url;
+
     if (res.status >= 300 && res.status < 400) {
       const location = res.headers.get('location');
-      console.log('XHS redirect to:', location);
-      // 重新導向時直接回傳空內容，讓用戶手動選分類
-      return { content: null, username: '', finalUrl: location || url };
+      finalUrl = location || url;
+      console.log('XHS redirect to:', finalUrl);
+      try {
+        const res2 = await fetch(finalUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+          },
+        });
+        if (res2.ok) html = await res2.text();
+      } catch (e) {
+        console.log('XHS redirect fetch failed:', e.message);
+      }
+    } else if (res.ok) {
+      html = await res.text();
+      finalUrl = res.url;
     }
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const html = await res.text();
-    const finalUrl = res.url;
+    if (!html) return { content: null, username: '', finalUrl, ogTitle: '' };
 
     const descMatch =
       html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i) ||
@@ -248,17 +260,13 @@ async function fetchXhsContent(url) {
       html.match(/<meta\s+content="([^"]+)"\s+property="og:title"/i);
 
     const content = descMatch ? decodeHtmlEntities(descMatch[1]) : null;
+    const ogTitle = titleMatch ? decodeHtmlEntities(titleMatch[1]).replace(/\s*[-|]\s*小红书.*$/i, '').trim() : '';
+    const username = ogTitle || '';
 
-    let username = '';
-    if (titleMatch) {
-      const raw = decodeHtmlEntities(titleMatch[1]);
-      username = raw.replace(/\s*[-|]\s*小红书.*$/i, '').trim();
-    }
-
-    return { content, username, finalUrl };
+    return { content, username, finalUrl, ogTitle };
   } catch (err) {
     console.error('Fetch XHS error:', err.message);
-    return { content: null, username: '', finalUrl: url };
+    return { content: null, username: '', finalUrl: url, ogTitle: '' };
   }
 }
 
@@ -411,61 +419,57 @@ if (isXhsUrl(text)) {
   }
   await replyText(event.replyToken, '⏳ 讀取中，請稍候...');
   try {
-    const { content, username, finalUrl } = await fetchXhsContent(rawUrl);
+    const { content, username, finalUrl, ogTitle } = await fetchXhsContent(rawUrl);
     const cleanUrl = finalUrl || rawUrl;
 
-    if (content) {
-      // 有內容 → AI 自動分類存檔
+    const textPart = text
+      .replace(rawUrl, '')
+      .replace(/Copy and open rednote to view the note/gi, '')
+      .replace(/http\S+/g, '')
+      .trim();
+
+    const bestContent = content || ogTitle || textPart || null;
+    const bestTitle = ogTitle || textPart.slice(0, 20) || '小紅書貼文';
+
+    if (bestContent) {
+      // 有任何文字 → AI 自動分類存檔
       const userCats = await getCategories(userId);
-      const aiResult = await classifyContent(content, username, userCats);
+      const aiResult = await classifyContent(bestContent, username, userCats);
       const saved = await saveArticle(userId, {
-        title: aiResult.title,
+        title: aiResult.title || bestTitle,
         url: cleanUrl,
         username: username,
-        content,
-        summary: aiResult.summary,
+        content: bestContent,
+        summary: aiResult.summary || bestContent.slice(0, 50),
         category: aiResult.category,
       });
       if (saved.success) {
         const msg =
           `✅ 小紅書貼文已儲存！\n\n` +
           `📂 分類：${aiResult.category}\n` +
-          `📌 標題：${aiResult.title}\n` +
-          `📝 摘要：${aiResult.summary}\n` +
-          `👤 作者：${username}\n` +
+          `📌 標題：${aiResult.title || bestTitle}\n` +
+          `📝 摘要：${aiResult.summary || ''}\n` +
           `🔗 ${cleanUrl}`;
         await pushText(userId, msg);
       } else {
         await pushText(userId, `⚠️ 儲存失敗。\n錯誤：${saved.error}`);
       }
     } else {
-      // 無法抓取內容 → 暫存，讓用戶選分類
-      const titleFromText = text
-  .replace(rawUrl, '')
-  .replace(/Copy and open rednote to view the note/gi, '')
-  .replace(/http\S+/g, '')  // 移除其他網址
-  .trim()
-  .slice(0, 50) || '小紅書貼文';
-
-// 取第一段當標題，全文當摘要
-const lines = titleFromText.split(/[\n|]/).map(l => l.trim()).filter(Boolean);
-const title = lines[0]?.slice(0, 20) || titleFromText.slice(0, 20);
-const summary = titleFromText;
-
-pendingArticles.set(userId, {
-  url: cleanUrl,
-  title,
-  content: titleFromText,
-  username: '',
-  summary,
-});
+      // 完全沒有文字 → 讓用戶手動選分類
+      pendingArticles.set(userId, {
+        url: cleanUrl,
+        title: '小紅書貼文',
+        content: '小紅書貼文',
+        username: '',
+        summary: '小紅書貼文',
+      });
 
       const cats = await getCategories(userId);
       return client.pushMessage({
         to: userId,
         messages: [{
           type: 'text',
-          text: `📌 連結已讀取！\n小紅書內容無法自動讀取，請選擇分類後儲存：\n\n${cleanUrl}`,
+          text: `📌 連結已讀取！\n無法自動讀取內容，請選擇分類後儲存：\n\n${cleanUrl}`,
           quickReply: {
             items: cats.slice(0, 13).map(cat => ({
               type: 'action',
