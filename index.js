@@ -18,6 +18,7 @@ const {
   renameCategoryById,
   updateArticleCategory,
   deleteArticle,
+  getUserBySlug,
 } = require('./db');
 const { createRichMenu } = require('./setup-richmenu');
 
@@ -615,7 +616,7 @@ if (text.startsWith('/xhs分類')) {
   // ── 我的收藏頁 ──
   if (text === '我的收藏' || text === '/我的收藏') {
     const user = await getOrCreateUser(userId);
-    const url = `${process.env.APP_URL}/me?token=${user.token}`;
+    const url = `${process.env.APP_URL}/u/${user.slug}`;
     return replyText(event.replyToken,
       `📚 你的專屬收藏頁：\n${url}\n\n書籤起來方便隨時查看！`
     );
@@ -759,6 +760,12 @@ app.post('/api/articles/delete', async (req, res) => {
 });
 
 // ── Web 收藏頁（雜誌風格）────────────────────────────────
+
+app.get('/u/:slug', async (req, res) => {
+  const user = await getUserBySlug(req.params.slug);
+  if (!user) return res.status(404).send('找不到這個收藏頁');
+  res.redirect(`/me?token=${user.token}`);
+});
 
 app.get('/me', async (req, res) => {
   const { token, category, keyword } = req.query;
