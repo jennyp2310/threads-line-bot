@@ -764,10 +764,14 @@ app.post('/api/articles/delete', async (req, res) => {
 app.get('/u/:slug', async (req, res) => {
   const user = await getUserBySlug(req.params.slug);
   if (!user) return res.status(404).send('找不到這個收藏頁');
-  res.redirect(`/me?token=${user.token}`);
+  req.query.token = user.token;
+  await handleMePage(req, res);
 });
 
-app.get('/me', async (req, res) => {
+app.get('/me', handleMePage);
+
+
+async function handleMePage(req, res) {
   const { token, category, keyword } = req.query;
   if (!token) return res.status(403).send('找不到你的收藏頁');
 
@@ -1144,7 +1148,7 @@ app.get('/me', async (req, res) => {
   </script>
 </body>
 </html>`);
-});
+}
 
 // ── 一次性 Rich Menu 設定路由 ─────────────────────────────
 
