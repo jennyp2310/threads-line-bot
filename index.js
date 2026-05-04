@@ -268,6 +268,23 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   }
 });
 
+// ── 分類自動配色 ──────────────────────────────────────────
+function getCatColor(name) {
+  const colors = [
+    { bg: '#A89088', text: '#F5F1EE' },
+    { bg: '#96A490', text: '#F5F1EE' },
+    { bg: '#8A9EAA', text: '#F5F1EE' },
+    { bg: '#A098AC', text: '#F5F1EE' },
+    { bg: '#A8A080', text: '#F5F1EE' },
+    { bg: '#9AA0AE', text: '#F5F1EE' },
+    { bg: '#B09890', text: '#F5F1EE' },
+    { bg: '#8AA898', text: '#F5F1EE' },
+  ];
+  let hash = 0;
+  for (const c of name) hash += c.charCodeAt(0);
+  return colors[hash % colors.length];
+}
+
 async function handleMessage(event) {
   const text = event.message.text.trim();
   const userId = event.source.userId;
@@ -802,163 +819,212 @@ app.get('/me', async (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>我的 IG & Threads 收藏</title>
+  <title>MY.FEED</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Nunito:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'DM Sans', -apple-system, sans-serif; background: #FAFAF7; color: #1a1a18; }
+    body { font-family: 'Nunito', sans-serif; background: #E8E2DC; color: #302825; min-height: 100vh; }
 
     /* Header */
-    .header { border-bottom: 3px solid #1a1a18; padding: 20px 20px 14px; display: flex; align-items: flex-end; justify-content: space-between; max-width: 720px; margin: 0 auto; }
-    .logo { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; letter-spacing: -1px; line-height: 1; text-decoration: none; color: #1a1a18; }
-    .logo span { color: #C8522A; }
-    .header-meta { font-size: 11px; color: #888; letter-spacing: 2px; text-transform: uppercase; text-align: right; line-height: 1.6; }
+    .header { background: #EDE8E3; border-bottom: 1.5px solid #B8ADA5; padding: 20px 24px 14px; display: flex; align-items: flex-end; justify-content: space-between; max-width: 720px; margin: 0 auto; }
+    .logo { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 500; letter-spacing: 4px; text-decoration: none; color: #3A2F2A; }
+    .logo span { color: #9A8678; }
+    .header-meta { font-size: 10px; color: #9A8678; letter-spacing: 2px; text-transform: uppercase; text-align: right; line-height: 2; }
 
     /* Search */
-    .search-wrap { background: #FAFAF7; border-bottom: 0.5px solid #ccc; padding: 12px 20px; }
+    .search-wrap { background: #E2DBD4; border-bottom: 0.5px solid #CEC6BE; padding: 12px 24px; }
     .search-inner { max-width: 720px; margin: 0 auto; }
-    .search-form { display: flex; gap: 8px; flex-wrap: wrap; }
-    .search-form input { flex: 1; min-width: 140px; padding: 7px 12px; border: 0.5px solid #bbb; background: #fff; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; }
-    .search-form input:focus { border-color: #1a1a18; }
-    .search-form select { padding: 7px 12px; border: 0.5px solid #bbb; background: #fff; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; }
-    .search-form button { background: #1a1a18; color: #FAFAF7; border: none; padding: 7px 18px; font-family: 'DM Sans', sans-serif; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
-    .search-form button:hover { background: #C8522A; }
+    .search-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .search-form input { flex: 1; min-width: 140px; padding: 8px 16px; border: 0.5px solid #B8ADA5; background: #EDE8E3; border-radius: 20px; font-family: 'Nunito', sans-serif; font-size: 12px; color: #6A5E58; outline: none; }
+    .search-form input:focus { border-color: #9A8678; }
+    .search-form select { padding: 8px 14px; border: 0.5px solid #B8ADA5; background: #EDE8E3; border-radius: 20px; font-family: 'Nunito', sans-serif; font-size: 12px; color: #6A5E58; outline: none; }
+    .search-form button { background: #3A2F2A; color: #EDE8E3; border: none; padding: 8px 20px; border-radius: 20px; font-family: 'Nunito', sans-serif; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; }
+    .search-form button:hover { background: #A89088; }
 
     /* Section */
-    .section { max-width: 720px; margin: 0 auto; padding: 20px 20px 0; }
-    .section-title { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .section-title::after { content: ''; flex: 1; height: 0.5px; background: #ddd; }
+    .section { max-width: 720px; margin: 0 auto; padding: 22px 24px 0; }
+    .section-title { font-size: 10px; color: #9A8678; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+    .section-title::after { content: ''; flex: 1; height: 0.5px; background: #B8ADA5; }
 
     /* 分類橫向滑動 */
-    .cat-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+    .cat-scroll { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 8px; flex-wrap: wrap; scrollbar-width: none; }
     .cat-scroll::-webkit-scrollbar { display: none; }
-    .cat-pill { flex-shrink: 0; padding: 5px 14px; border: 0.5px solid #ccc; background: #fff; font-size: 12px; cursor: pointer; text-decoration: none; color: #1a1a18; white-space: nowrap; transition: all 0.15s; }
-    .cat-pill:hover, .cat-pill.active { background: #1a1a18; color: #FAFAF7; border-color: #1a1a18; }
+    .cat-pill { flex-shrink: 0; padding: 5px 16px; border-radius: 20px; font-size: 11px; cursor: pointer; text-decoration: none; white-space: nowrap; transition: opacity 0.15s; border: none; }
+    .cat-pill:hover { opacity: 0.8; }
+    .cat-pill-inactive { background: #EDE8E3; color: #6A5E58; border: 0.5px solid #B8ADA5; padding: 5px 16px; border-radius: 20px; font-size: 11px; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+    .cat-pill-inactive:hover { background: #E2DBD4; }
 
-    /* 橫向卡片滑動 */
-    .h-scroll { display: flex; gap: 12px; overflow-x: auto; padding: 4px 0 16px; scrollbar-width: none; }
+    /* 橫向卡片 */
+    .h-scroll { display: flex; gap: 12px; overflow-x: auto; padding: 4px 24px 20px; scrollbar-width: none; }
     .h-scroll::-webkit-scrollbar { display: none; }
-    .h-card { flex-shrink: 0; width: 240px; background: #fff; border: 0.5px solid #ddd; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
-    .h-card-cat { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #C8522A; }
-    .h-card-title { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 700; line-height: 1.4; }
-    .h-card-summary { font-size: 11px; color: #555; line-height: 1.5; flex: 1; }
-    .h-card-meta { font-size: 10px; color: #aaa; }
+    .h-card { flex-shrink: 0; width: 210px; background: #F5F1EE; border: 0.5px solid #CEC6BE; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 7px; }
+    .h-card-accent { width: 20px; height: 2px; border-radius: 4px; margin-bottom: 2px; }
+    .h-card-cat { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; }
+    .h-card-title { font-family: 'Cormorant Garamond', serif; font-size: 15px; font-weight: 500; line-height: 1.4; color: #302825; }
+    .h-card-summary { font-size: 11px; color: #7A6F68; line-height: 1.6; flex: 1; }
+    .h-card-meta { font-size: 10px; color: #AEA49C; }
     .h-card-actions { display: flex; gap: 6px; margin-top: 4px; }
     .h-card-actions .cat-select { flex: 1; font-size: 11px; }
-    .h-card-link { display: inline-block; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: #1a1a18; text-decoration: none; border-bottom: 1px solid #1a1a18; padding-bottom: 1px; margin-top: 4px; align-self: flex-start; }
-    .h-card-link:hover { color: #C8522A; border-color: #C8522A; }
+    .h-card-bot { border-top: 0.5px solid #DDD6CE; padding-top: 8px; margin-top: 4px; }
+    .h-card-link { display: inline-block; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #9A8678; text-decoration: none; }
+    .h-card-link:hover { color: #A89088; }
 
-    /* 搜尋結果格線 */
-    .container { max-width: 720px; margin: 0 auto; padding: 16px 20px; }
-    .result-label { font-size: 11px; color: #888; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #ccc; }
+    /* 格線卡片 */
+    .container { max-width: 720px; margin: 0 auto; padding: 16px 24px; }
+    .result-label { font-size: 10px; color: #9A8678; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 14px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 500px) { .grid { grid-template-columns: 1fr; } }
-    .card { background: #FAFAF7; padding: 18px; }
-    .card-cat { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #C8522A; margin-bottom: 8px; }
-    .card-title { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; line-height: 1.4; margin-bottom: 8px; }
-    .card-summary { font-size: 12px; color: #555; line-height: 1.6; margin-bottom: 12px; }
-    .card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 0.5px solid #ddd; padding-top: 10px; gap: 8px; flex-wrap: wrap; }
-    .meta-text { font-size: 11px; color: #aaa; }
-    .read-link-sm { font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: #1a1a18; text-decoration: none; font-weight: 500; border-bottom: 1px solid #1a1a18; padding-bottom: 1px; white-space: nowrap; }
-    .read-link-sm:hover { color: #C8522A; border-color: #C8522A; }
-    .card-actions { display: flex; gap: 8px; margin-top: 10px; border-top: 0.5px solid #eee; padding-top: 10px; }
+    .card { background: #F5F1EE; border: 0.5px solid #CEC6BE; border-radius: 18px; padding: 18px; }
+    .card-accent { width: 20px; height: 2px; border-radius: 4px; margin-bottom: 8px; }
+    .card-cat { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+    .card-title { font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 500; line-height: 1.4; margin-bottom: 8px; color: #302825; }
+    .card-summary { font-size: 12px; color: #7A6F68; line-height: 1.6; margin-bottom: 12px; }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 0.5px solid #DDD6CE; padding-top: 10px; gap: 8px; flex-wrap: wrap; }
+    .meta-text { font-size: 10px; color: #AEA49C; }
+    .read-link-sm { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #9A8678; text-decoration: none; }
+    .read-link-sm:hover { color: #A89088; }
+    .card-actions { display: flex; gap: 8px; margin-top: 10px; border-top: 0.5px solid #E8E3DF; padding-top: 10px; }
     .card-actions .cat-select { flex: 1; }
 
     /* 共用 */
-    .cat-select { padding: 5px 8px; border: 0.5px solid #bbb; background: #fff; font-family: 'DM Sans', sans-serif; font-size: 11px; outline: none; cursor: pointer; }
-    .cat-select:focus { border-color: #1a1a18; }
-    .delete-btn { background: none; border: 0.5px solid #ccc; padding: 5px 10px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: #aaa; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
-    .delete-btn:hover { background: #C8522A; color: #fff; border-color: #C8522A; }
-    .divider { height: 1px; background: #eee; margin: 0 20px; }
+    .cat-select { padding: 5px 10px; border: 0.5px solid #B8ADA5; background: #EDE8E3; border-radius: 12px; font-family: 'Nunito', sans-serif; font-size: 11px; outline: none; cursor: pointer; color: #6A5E58; }
+    .cat-select:focus { border-color: #9A8678; }
+    .delete-btn { background: none; border: 0.5px solid #CEC6BE; padding: 5px 12px; border-radius: 12px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; color: #AEA49C; font-family: 'Nunito', sans-serif; white-space: nowrap; }
+    .delete-btn:hover { background: #A89088; color: #F5F1EE; border-color: #A89088; }
 
     /* 分類管理 */
-    .cat-manage { background: #f0ede8; padding: 24px 20px 40px; margin-top: 32px; }
-    .cat-manage-inner { max-width: 720px; margin: 0 auto; }
-    .cat-manage-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; margin-bottom: 16px; }
-    .cat-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .cat-item { display: flex; align-items: center; gap: 6px; background: #fff; border: 0.5px solid #ccc; padding: 6px 10px; font-size: 13px; }
+    .cat-manage-wrap { max-width: 720px; margin: 20px auto 0; padding: 0 16px 20px; }
+    .cat-manage { background: #E2DBD4; border-radius: 18px; padding: 20px; border: 0.5px solid #CEC6BE; }
+    .cat-manage-title { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: #9A8678; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+    .cat-manage-title::after { content: ''; flex: 1; height: 0.5px; background: #B8ADA5; }
+    .cat-hint { font-size: 11px; color: #AEA49C; margin-bottom: 12px; }
+    .cat-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .cat-item { display: flex; align-items: center; gap: 6px; background: #F5F1EE; border: 0.5px solid #CEC6BE; border-radius: 20px; padding: 5px 14px; font-size: 11px; color: #5A5050; }
     .cat-item-name { cursor: pointer; }
-    .cat-item-name:hover { color: #C8522A; }
-    .cat-item button { background: none; border: none; cursor: pointer; font-size: 12px; color: #aaa; padding: 0; line-height: 1; }
-    .cat-item button:hover { color: #C8522A; }
-    .cat-add { display: flex; gap: 8px; margin-bottom: 10px; }
-    .cat-add input { flex: 1; padding: 7px 12px; border: 0.5px solid #bbb; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; background: #fff; }
-    .cat-add input:focus { border-color: #1a1a18; }
-    .cat-add button { background: #1a1a18; color: #fff; border: none; padding: 7px 16px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: 'DM Sans', sans-serif; }
-    .cat-add button:hover { background: #C8522A; }
-    .cat-msg { font-size: 12px; min-height: 18px; margin-top: 4px; }
-    .cat-hint { font-size: 11px; color: #aaa; margin-bottom: 12px; }
-    .empty { text-align: center; padding: 60px 20px; color: #aaa; font-size: 14px; line-height: 2; }
-    .empty strong { display: block; font-family: 'Playfair Display', serif; font-size: 20px; color: #bbb; margin-bottom: 8px; }
+    .cat-item-name:hover { color: #A89088; }
+    .cat-item button { background: none; border: none; cursor: pointer; font-size: 11px; color: #AEA49C; padding: 0; line-height: 1; }
+    .cat-item button:hover { color: #A89088; }
+    .cat-add { display: flex; gap: 8px; margin-bottom: 8px; }
+    .cat-add input { flex: 1; padding: 8px 16px; border: 0.5px solid #B8ADA5; background: #F5F1EE; border-radius: 20px; font-family: 'Nunito', sans-serif; font-size: 12px; outline: none; color: #6A5E58; }
+    .cat-add input:focus { border-color: #9A8678; }
+    .cat-add button { background: #3A2F2A; color: #EDE8E3; border: none; padding: 8px 18px; border-radius: 20px; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; font-family: 'Nunito', sans-serif; }
+    .cat-add button:hover { background: #A89088; }
+    .cat-msg { font-size: 11px; min-height: 18px; margin-top: 4px; }
+
+    .empty { text-align: center; padding: 60px 20px; color: #AEA49C; font-size: 14px; line-height: 2; }
+    .empty strong { display: block; font-family: 'Cormorant Garamond', serif; font-size: 22px; color: #B8ADA5; margin-bottom: 8px; font-weight: 400; }
   </style>
 </head>
 <body>
 
-  <div class="header">
-    <a class="logo" href="/me?token=${token}">MY<span>.</span>FEED</a>
-    <div class="header-meta">我的收藏<br>共 ${articles.length} 篇文章</div>
+  <div style="background:#EDE8E3;">
+    <div class="header">
+      <a class="logo" href="/me?token=${token}">MY<span>.</span>FEED</a>
+      <div class="header-meta">Threads ✦ Instagram ✦ Facebook<br>共 ${articles.length} 篇收藏</div>
+    </div>
   </div>
 
-  <div class="search-wrap">
-    <div class="search-inner">
-      <form class="search-form" method="get" action="/me">
-        <input type="hidden" name="token" value="${token}">
-        <input type="text" name="keyword" placeholder="搜尋關鍵字..." value="${keyword || ''}">
-        <select name="category">
-          <option value="">全部分類</option>
-          ${categoryOptions}
-        </select>
-        <button type="submit">搜尋</button>
-      </form>
+  <div style="background:#E2DBD4;">
+    <div class="search-wrap">
+      <div class="search-inner">
+        <form class="search-form" method="get" action="/me">
+          <input type="hidden" name="token" value="${token}">
+          <input type="text" name="keyword" placeholder="搜尋關鍵字..." value="${keyword || ''}">
+          <select name="category">
+            <option value="">全部分類</option>
+            ${categoryOptions}
+          </select>
+          <button type="submit">搜尋</button>
+        </form>
+      </div>
     </div>
   </div>
 
   ${!isFiltered ? `
-  <!-- 分類橫向滑動 -->
-  <div class="section" style="padding-top:24px;">
-    <div class="section-title">📂 分類</div>
-    <div class="cat-scroll">
-      ${categories.map(c => `
-        <a class="cat-pill" href="/me?token=${token}&category=${encodeURIComponent(c)}">${c}</a>
-      `).join('')}
-    </div>
-  </div>
-
-  <!-- 最新10筆橫向卡片 -->
-  <div class="section" style="padding-top:20px;">
-    <div class="section-title">📋 最新 10 筆收藏</div>
-    ${articles.length === 0 ? `
-      <div class="empty">
-        <strong>尚無收藏文章</strong>
-        回到 LINE 貼上 Threads 連結開始收藏！
+  <div style="background:#EDE8E3; padding-bottom: 8px;">
+    <div class="section">
+      <div class="section-title">分類</div>
+      <div class="cat-scroll">
+        ${categories.map(c => {
+          const col = getCatColor(c);
+          return `<a class="cat-pill" href="/me?token=${token}&category=${encodeURIComponent(c)}"
+            style="background:${col.bg};color:${col.text};">${c}</a>`;
+        }).join('')}
       </div>
-    ` : `
-      <div class="h-scroll">${recentCards}</div>
-    `}
+    </div>
+
+    <div class="section" style="padding-top:20px;">
+      <div class="section-title">最新收藏</div>
+      ${articles.length === 0 ? `
+        <div class="empty"><strong>尚無收藏文章</strong>回到 LINE 貼上連結開始收藏！</div>
+      ` : ''}
+    </div>
+    ${articles.length > 0 ? `
+      <div class="h-scroll">
+        ${articles.slice(0, 10).map(a => {
+          const col = getCatColor(a.category || '');
+          return `
+          <div class="h-card" id="card-${a.id}">
+            <div class="h-card-accent" style="background:${col.bg}"></div>
+            <div class="h-card-cat" style="color:${col.bg}">${a.category || ''}</div>
+            <div class="h-card-title">${a.title || '無標題'}</div>
+            <div class="h-card-summary">${a.summary || ''}</div>
+            <div class="h-card-meta">👤 ${a.username || ''}　${a.saved_at ? a.saved_at.slice(0,10) : ''}</div>
+            <div class="h-card-actions">
+              <select class="cat-select" onchange="updateCat('${a.id}', this)">
+                ${categories.map(c => `<option value="${c}" ${a.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+              </select>
+              <button class="delete-btn" onclick="deleteArticleById('${a.id}')">刪除</button>
+            </div>
+            <div class="h-card-bot">
+              <a class="h-card-link" href="${a.url}" target="_blank">閱讀全文 →</a>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    ` : ''}
   </div>
   ` : `
-  <!-- 搜尋 / 分類結果 -->
-  <div class="container">
-    <div class="result-label">
-      ${category ? `📂 ${category}` : keyword ? `🔍 "${keyword}"` : ''} — 共 ${articles.length} 篇
-      　<a href="/me?token=${token}" style="font-size:11px;color:#C8522A;text-decoration:none;">← 回首頁</a>
-    </div>
-    ${articles.length === 0 ? `
-      <div class="empty">
-        <strong>找不到文章</strong>
-        試試其他關鍵字或分類
+  <div style="background:#EDE8E3; min-height: 60vh;">
+    <div class="container">
+      <div class="result-label">
+        ${category ? `📂 ${category}` : keyword ? `🔍 "${keyword}"` : ''} — 共 ${articles.length} 篇
+        　<a href="/me?token=${token}" style="font-size:11px;color:#A89088;text-decoration:none;">← 回首頁</a>
       </div>
-    ` : `
-      <div class="grid">${gridCards}</div>
-    `}
+      ${articles.length === 0 ? `
+        <div class="empty"><strong>找不到文章</strong>試試其他關鍵字或分類</div>
+      ` : `
+        <div class="grid">
+          ${articles.map(a => {
+            const col = getCatColor(a.category || '');
+            return `
+            <div class="card" id="card-${a.id}">
+              <div class="card-accent" style="background:${col.bg}"></div>
+              <div class="card-cat" style="color:${col.bg}">${a.category || ''}</div>
+              <div class="card-title">${a.title || '無標題'}</div>
+              <div class="card-summary">${a.summary || ''}</div>
+              <div class="card-footer">
+                <span class="meta-text">👤 ${a.username || ''}　${a.saved_at ? a.saved_at.slice(0,10) : ''}</span>
+                <a class="read-link-sm" href="${a.url}" target="_blank">閱讀 →</a>
+              </div>
+              <div class="card-actions">
+                <select class="cat-select" onchange="updateCat('${a.id}', this)">
+                  ${categories.map(c => `<option value="${c}" ${a.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+                </select>
+                <button class="delete-btn" onclick="deleteArticleById('${a.id}')">刪除</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      `}
+    </div>
   </div>
   `}
 
-  <!-- 分類管理 -->
-  <div class="cat-manage" style="margin-top:24px;">
-    <div class="cat-manage-inner">
-      <div class="cat-manage-title">📋 分類管理</div>
+  <div class="cat-manage-wrap">
+    <div class="cat-manage">
+      <div class="cat-manage-title">分類管理</div>
       <div class="cat-hint">點分類名稱可改名，點 ✕ 可刪除</div>
       <div class="cat-list" id="catList"></div>
       <div class="cat-add">
@@ -973,52 +1039,61 @@ app.get('/me', async (req, res) => {
     const TOKEN = '${token}';
     let cats = ${JSON.stringify(categories)};
 
+    const COLORS = [
+      { bg: '#A89088', text: '#F5F1EE' },
+      { bg: '#96A490', text: '#F5F1EE' },
+      { bg: '#8A9EAA', text: '#F5F1EE' },
+      { bg: '#A098AC', text: '#F5F1EE' },
+      { bg: '#A8A080', text: '#F5F1EE' },
+      { bg: '#9AA0AE', text: '#F5F1EE' },
+      { bg: '#B09890', text: '#F5F1EE' },
+      { bg: '#8AA898', text: '#F5F1EE' },
+    ];
+    function getCatColor(name) {
+      let hash = 0;
+      for (const c of name) hash += c.charCodeAt(0);
+      return COLORS[hash % COLORS.length];
+    }
+
     async function updateCat(articleId, selectEl) {
       const category = selectEl.value;
       const res = await fetch('/api/articles/update-category', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: TOKEN, articleId, category }),
       });
       const data = await res.json();
-      if (data.success) {
-        showMsg('✅ 分類已更新為「' + category + '」');
-      } else {
-        showMsg('❌ ' + data.error, true);
-      }
+      showMsg(data.success ? '✅ 分類已更新為「' + category + '」' : '❌ ' + data.error, !data.success);
     }
 
     async function deleteArticleById(articleId) {
       if (!confirm('確定刪除這篇文章？')) return;
       const res = await fetch('/api/articles/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: TOKEN, articleId }),
       });
       const data = await res.json();
       if (data.success) {
-        const card = document.getElementById('card-' + articleId);
-        if (card) card.remove();
+        document.getElementById('card-' + articleId)?.remove();
         showMsg('🗑 文章已刪除');
-      } else {
-        showMsg('❌ ' + data.error, true);
-      }
+      } else { showMsg('❌ ' + data.error, true); }
     }
 
     function renderCats() {
       const list = document.getElementById('catList');
-      list.innerHTML = cats.map(c => \`
-        <div class="cat-item">
+      list.innerHTML = cats.map(c => {
+        const col = getCatColor(c);
+        return \`<div class="cat-item">
+          <span style="width:8px;height:8px;border-radius:50%;background:\${col.bg};display:inline-block;flex-shrink:0;"></span>
           <span class="cat-item-name" onclick="renameCat('\${c}')">\${c}</span>
           <button onclick="deleteCat('\${c}')" title="刪除">✕</button>
-        </div>
-      \`).join('');
+        </div>\`;
+      }).join('');
     }
 
     function showMsg(msg, isError) {
       const el = document.getElementById('catMsg');
       el.textContent = msg;
-      el.style.color = isError ? '#C8522A' : '#3a7a3a';
+      el.style.color = isError ? '#A89088' : '#96A490';
       setTimeout(() => el.textContent = '', 3000);
     }
 
@@ -1027,54 +1102,35 @@ app.get('/me', async (req, res) => {
       const name = input.value.trim();
       if (!name) return showMsg('請輸入分類名稱', true);
       const res = await fetch('/api/categories/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: TOKEN, name }),
       });
       const data = await res.json();
-      if (data.success) {
-        cats.push(name);
-        renderCats();
-        input.value = '';
-        showMsg('✅ 已新增「' + name + '」');
-      } else {
-        showMsg('❌ ' + data.error, true);
-      }
+      if (data.success) { cats.push(name); renderCats(); input.value = ''; showMsg('✅ 已新增「' + name + '」'); }
+      else { showMsg('❌ ' + data.error, true); }
     }
 
     async function deleteCat(name) {
       if (!confirm('確定刪除分類「' + name + '」？')) return;
       const res = await fetch('/api/categories/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: TOKEN, name }),
       });
       const data = await res.json();
-      if (data.success) {
-        cats = cats.filter(c => c !== name);
-        renderCats();
-        showMsg('🗑 已刪除「' + name + '」');
-      } else {
-        showMsg('❌ ' + data.error, true);
-      }
+      if (data.success) { cats = cats.filter(c => c !== name); renderCats(); showMsg('🗑 已刪除「' + name + '」'); }
+      else { showMsg('❌ ' + data.error, true); }
     }
 
     async function renameCat(oldName) {
       const newName = prompt('將「' + oldName + '」改名為：', oldName);
       if (!newName || newName.trim() === oldName) return;
       const res = await fetch('/api/categories/rename', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: TOKEN, oldName, newName: newName.trim() }),
       });
       const data = await res.json();
-      if (data.success) {
-        cats = cats.map(c => c === oldName ? newName.trim() : c);
-        renderCats();
-        showMsg('✅ 已改名為「' + newName.trim() + '」');
-      } else {
-        showMsg('❌ ' + data.error, true);
-      }
+      if (data.success) { cats = cats.map(c => c === oldName ? newName.trim() : c); renderCats(); showMsg('✅ 已改名為「' + newName.trim() + '」'); }
+      else { showMsg('❌ ' + data.error, true); }
     }
 
     renderCats();
