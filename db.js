@@ -27,9 +27,10 @@ async function getOrCreateUser(lineUserId) {
   if (existingUser) return existingUser;
 
   const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const slug = Math.random().toString(36).substring(2, 10);
   const { data: newUser, error } = await supabase
     .from('users')
-    .insert({ line_user_id: lineUserId, token })
+    .insert({ line_user_id: lineUserId, token, slug })
     .select()
     .single();
 
@@ -302,6 +303,7 @@ async function saveToNotion({ title, url, content, summary }) {
 }
 
 module.exports = {
+  getUserBySlug,
   getOrCreateUser,
   saveArticle,
   queryByCategory,
@@ -320,3 +322,13 @@ module.exports = {
   deleteArticle,
   saveToNotion,
 };
+
+async function getUserBySlug(slug) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('slug', slug)
+    .single();
+  if (error) return null;
+  return data;
+}
