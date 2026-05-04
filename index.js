@@ -54,15 +54,15 @@ function parseThreadsUrl(text) {
 // ── IG URL 工具函式 ───────────────────────────────────────
 
 function isInstagramUrl(text) {
-  return text.includes('instagram.com/p/');
+  return text.includes('instagram.com/p/') || text.includes('instagram.com/reel/');
 }
 
 function parseInstagramUrl(text) {
-  const urlMatch = text.match(/https:\/\/www\.instagram\.com\/p\/([\w-]+)/);
+  const urlMatch = text.match(/https:\/\/www\.instagram\.com\/(p|reel)\/([\w-]+)/);
   if (!urlMatch) return null;
   return {
-    cleanUrl: `https://www.instagram.com/p/${urlMatch[1]}/`,
-    postId: urlMatch[1],
+    cleanUrl: `https://www.instagram.com/${urlMatch[1]}/${urlMatch[2]}/`,
+    postId: urlMatch[2],
   };
 }
 
